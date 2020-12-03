@@ -362,61 +362,96 @@ non_disclosed_mat <- sp500 %>%
 
 ## To-do: simplify the code with array
 
+```{r}
+f_make_graphs <- function(df) {
+  pi <- df[8:10] %>% 
+    bind_rows() %>% 
+    select(pipos, pizero, pineg) %>%
+    arrange(desc(pipos), pineg, pizero)
+  
+  cex = cex.axis = 0.8
+  par(mfrow = c(1, 2))
+  plot(12 * 100 * sort(df$alpha, decreasing = TRUE), 1:length(df$alpha), type = 'b', las = 1, pch = 20, cex = cex, cex.axis = cex.axis, 
+       xlab = "", ylab = "", main = "alpha", axes = FALSE)
+  box(); grid()
+  labs = seq(-30, 30, by = 10)
+  axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
+  axis(side = 2, at = 1:length(df$alpha), labels = 1:length(df$alpha), las = 1, cex.axis = cex.axis)
+  
+  mainstr = expression(hat(pi)^'+'*' / '*hat(pi)^0*' / '*hat(pi)^'-')
+  barplot(t(100 * pi), horiz = TRUE, names.arg = NULL, col = c(gray(0), gray(0.8), gray(0.5)),
+          space = 0, xlab = "", xlim = c(0, 100), cex.names = cex.axis, border = NA,
+          cex.axis = cex.axis, main = mainstr, las = 1, axes = FALSE)
+  labs = seq(0, 100, by = 25)
+  axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
+  box()
+  x = seq(from = 104, to = -4, length.out = 200)
+  y = seq(from = 0, to = 100, length.out = 200)
+  par(new = TRUE); plot(x, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+  par(new = TRUE); plot(x-27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+  par(new = TRUE); plot(x+27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+}
+```
+
 ### alphaScreening
 
 #### Returns only
 ```{r}
 ctr <- list(nCore = 3)
 results_all <- alphaScreening(ret_mat, control = ctr)
-
 results_green <- alphaScreening(g_ret_mat, control = ctr)
-
 results_brown <- alphaScreening(b_ret_mat, control = ctr)
-
 results_between <- alphaScreening(neutral_ret_mat, control = ctr)
-
 results_non_disclosed <- alphaScreening(non_disclosed_mat, control = ctr)
 
+results_all %>% f_make_graphs()
+results_green %>% f_make_graphs()
+results_brown %>% f_make_graphs()
+results_between %>% f_make_graphs()
+results_non_disclosed %>% f_make_graphs()
 ```
 `
 #### One-factor model
 ```{r}
 results_all_1f <- alphaScreening(ret_mat, factors = one_factor, control = ctr)
-
 results_green_1f <- alphaScreening(g_ret_mat, factors = one_factor, control = ctr)
-
 results_brown_1f <- alphaScreening(b_ret_mat, factors = one_factor, control = ctr)
-
 results_between_1f <- alphaScreening(neutral_ret_mat, factors = one_factor, control = ctr)
-
 results_non_disclosed_1f <- alphaScreening(non_disclosed_mat, factors = one_factor, control = ctr)
 
+results_all_1f %>% f_make_graphs()
+results_green_1f %>% f_make_graphs()
+results_brown_1f %>% f_make_graphs()
+results_between_1f %>% f_make_graphs()
+results_non_disclosed_1f %>% f_make_graphs()
 ```
 
 #### Three-factor model
 ```{r}
 results_all_3f <- alphaScreening(ret_mat, factors = three_factor, control = ctr)
-
 results_green_3f <- alphaScreening(g_ret_mat, factors = three_factor, control = ctr)
-
 results_brown_3f <- alphaScreening(b_ret_mat, factors = three_factor, control = ctr)
-
 results_between_3f <- alphaScreening(neutral_ret_mat, factors = three_factor, control = ctr)
-
 results_non_disclosed_3f <- alphaScreening(non_disclosed_mat, factors = three_factor, control = ctr)
 
+results_all_3f %>% f_make_graphs()
+results_green_3f %>% f_make_graphs()
+results_brown_3f %>% f_make_graphs()
+results_between_3f %>% f_make_graphs()
+results_non_disclosed_3f %>% f_make_graphs()
 ```
 
 #### Six-factor model
 ```{r}
 results_all_6f <- alphaScreening(ret_mat, factors = six_factor, control = ctr)
-
 results_green_6f <- alphaScreening(g_ret_mat, factors = six_factor, control = ctr)
-
 results_brown_6f <- alphaScreening(b_ret_mat, factors = six_factor, control = ctr)
-
 results_between_6f <- alphaScreening(neutral_ret_mat, factors = six_factor, control = ctr)
-
 results_non_disclosed_6f <- alphaScreening(non_disclosed_mat, factors = six_factor, control = ctr)
 
+results_all_6f %>% f_make_graphs()
+results_green_6f %>% f_make_graphs()
+results_brown_6f %>% f_make_graphs()
+results_between_6f %>% f_make_graphs()
+results_non_disclosed_6f %>% f_make_graphs()
 ```

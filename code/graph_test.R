@@ -16,7 +16,7 @@ pi <- df[8:10] %>%
   arrange(desc(pipos), pineg, pizero) %>% 
   mutate(index = index(.)) %>%
   pivot_longer(1:3, names_to = "type", values_to = "pi") %>% 
-  mutate(type = factor(type, levels = c("pipos", "pizero", "pineg")))
+  mutate(type = factor(type, levels = c("pineg", "pizero", "pipos")))
 
 pi %>% 
   ggplot(aes(index, pi, fill = type, color = type)) +
@@ -30,42 +30,70 @@ pi %>%
 pi %>% 
   ggplot(aes(index, pi, fill = type)) +
   geom_bar(position = "stack", stat = "identity") +
-  coord_flip()
+  coord_flip() +
+  labs(title = "Probability of Out-/Equal-/Under-performance")
 
 
 pi %>% 
-  filter(type == "pipos") %>% 
+  filter(type == "pizero") %>% 
   ggplot(aes(index, pi)) +
   geom_bar( stat = "identity")
 
 
-data(hfdata)
-rets <-  hfdata[,1:50]
-ctr <- list(nCore = 3)
-df <- alphaScreening(rets, control = ctr)
-test <- f.tbl.screening(df, 60)
+pi <- df[8:10] %>% 
+  bind_rows() %>% 
+  select(pipos, pizero, pineg) %>%
+  arrange(desc(pipos), pineg, pizero)
+
+cex = cex.axis = 0.8
+par(mfrow = c(1, 2))
+plot(12 * 100 * sort(df$alpha, decreasing = TRUE), 1:length(df$alpha), type = 'b', las = 1, pch = 20, cex = cex, cex.axis = cex.axis, 
+     xlab = "", ylab = "", main = "alpha", axes = FALSE)
+box(); grid()
+labs = seq(-30, 30, by = 10)
+axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
+axis(side = 2, at = 1:length(df$alpha), labels = 1:length(df$alpha), las = 1, cex.axis = cex.axis)
+
+mainstr = expression(hat(pi)^'+'*' / '*hat(pi)^0*' / '*hat(pi)^'-')
+barplot(t(100 * pi), horiz = TRUE, names.arg = NULL, col = c(gray(0), gray(0.8), gray(0.5)),
+        space = 0, xlab = "", xlim = c(0, 100), cex.names = cex.axis, border = NA,
+        cex.axis = cex.axis, main = mainstr, las = 1, axes = FALSE)
+labs = seq(0, 100, by = 25)
+axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
+box()
+x = seq(from = 104, to = -4, length.out = 200)
+y = seq(from = 0, to = 100, length.out = 200)
+par(new = TRUE); plot(x, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+par(new = TRUE); plot(x-27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+par(new = TRUE); plot(x+27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
 
 
-.f.tbl.screening = function(hf, nblock, do.norm = TRUE){
-  pos = order(hf$alpha, decreasing = TRUE)
-  n = nrow(hf)
-  ngroup = floor(n / nblock)
-  tbl = matrix(data = NA, nrow = nblock, ncol = 4)
-  for (i in 1 : nblock){
-    idx = pos[((i-1)*ngroup+1) : (i*ngroup)]
-    if (i == nblock){
-      idx = pos[((i-1)*ngroup+1) : n]
-    }
-    idx = idx[!is.na(idx)]
-    tbl[i,1]   = mean(hf$alpha[idx])
-    tbl[i,2:4] = colMeans(hf[idx,c("pipos", "pizero", "pineg")])
-  }
-  if (do.norm) {
-    #browser()
-    tmp = tbl[,2:4]
-    tmp = sweep(tmp, 2, rowSums(tmp), "/")
-    tbl[,2:4] = tmp 
-  }
-  return(tbl)
+make_graphs <- functions(df) {
+  pi <- df[8:10] %>% 
+    bind_rows() %>% 
+    select(pipos, pizero, pineg) %>%
+    arrange(desc(pipos), pineg, pizero)
+  
+  cex = cex.axis = 0.8
+  par(mfrow = c(1, 2))
+  plot(12 * 100 * sort(df$alpha, decreasing = TRUE), 1:length(df$alpha), type = 'b', las = 1, pch = 20, cex = cex, cex.axis = cex.axis, 
+       xlab = "", ylab = "", main = "alpha", axes = FALSE)
+  box(); grid()
+  labs = seq(-30, 30, by = 10)
+  axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
+  axis(side = 2, at = 1:length(df$alpha), labels = 1:length(df$alpha), las = 1, cex.axis = cex.axis)
+  
+  mainstr = expression(hat(pi)^'+'*' / '*hat(pi)^0*' / '*hat(pi)^'-')
+  barplot(t(100 * pi), horiz = TRUE, names.arg = NULL, col = c(gray(0), gray(0.8), gray(0.5)),
+          space = 0, xlab = "", xlim = c(0, 100), cex.names = cex.axis, border = NA,
+          cex.axis = cex.axis, main = mainstr, las = 1, axes = FALSE)
+  labs = seq(0, 100, by = 25)
+  axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
+  box()
+  x = seq(from = 104, to = -4, length.out = 200)
+  y = seq(from = 0, to = 100, length.out = 200)
+  par(new = TRUE); plot(x, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+  par(new = TRUE); plot(x-27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+  par(new = TRUE); plot(x+27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
 }
-f.tbl.screening = compiler::cmpfun(.f.tbl.screening)
+
