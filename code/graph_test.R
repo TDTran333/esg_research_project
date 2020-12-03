@@ -6,14 +6,16 @@ library(forcats)
 
 data(hfdata)
 
-rets <-  hfdata[,1:50]
+rets <-  hfdata[,1:40]
 ctr <- list(nCore = 3)
 df <- alphaScreening(rets, control = ctr)
+
+test2 <- test[with(test, order(-pipos, pineg)),]
 
 pi <- df[8:10] %>% 
   bind_rows() %>%
   select(pipos, pizero, pineg) %>% 
-  arrange(desc(pipos), pineg, pizero) %>% 
+  arrange(desc(pipos), pineg) %>% 
   mutate(index = index(.)) %>%
   pivot_longer(1:3, names_to = "type", values_to = "pi") %>% 
   mutate(type = factor(type, levels = c("pineg", "pizero", "pipos")))
@@ -27,18 +29,28 @@ pi %>%
         axis.text.y  = element_blank(),
         axis.ticks.y = element_blank())
 
+df$alpha %>% 
+  as.tibble() %>% 
+  ggplot(aes(sort(value, decreasing = TRUE), 1:length(value))) +
+  geom_point(size = 2) +
+  geom_line() +
+  labs(title = "alpha",
+       x = "",
+       y = "")
+
 pi %>% 
   ggplot(aes(index, pi, fill = type)) +
-  geom_bar(position = "stack", stat = "identity") +
+  geom_bar(position = "stack", stat = "identity", width=1) +
   coord_flip() +
-  labs(title = "Probability of Out-/Equal-/Under-performance")
-
-
-pi %>% 
-  filter(type == "pizero") %>% 
-  ggplot(aes(index, pi)) +
-  geom_bar( stat = "identity")
-
+  labs(title = "Probability of Out-/Equal-/Under-performance") +
+  geom_abline(intercept = 1, slope = -0.02, size = 1, linetype = 2) +
+  geom_abline(intercept = 1 + 0.25, slope = -0.02, size = 1, linetype = 2) +
+  geom_abline(intercept = 1 - 0.25, slope = -0.02, size = 1, linetype = 2) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(labels = percent, expand = c(0, 0)) +
+  scale_fill_grey() + theme_classic() +
+  labs(x = "Number of firms",
+       y = "Probability")
 
 f_make_graphs <- function(df) {
   pi <- df[8:10] %>% 

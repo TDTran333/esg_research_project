@@ -363,7 +363,7 @@ non_disclosed_mat <- sp500 %>%
 ## To-do: simplify the code with array
 
 ```{r}
-f_make_graphs <- function(df) {
+f_make_graphs <- function(df, title) {
   pi <- df[8:10] %>% 
     bind_rows() %>% 
     select(pipos, pizero, pineg) %>%
@@ -374,7 +374,7 @@ f_make_graphs <- function(df) {
   plot(12 * 100 * sort(df$alpha, decreasing = TRUE), 1:length(df$alpha), type = 'b', las = 1, pch = 20, cex = cex, cex.axis = cex.axis, 
        xlab = "", ylab = "", main = "alpha", axes = FALSE)
   box(); grid()
-  labs = seq(-30, 30, by = 10)
+  labs = seq(-30, 60, by = 10)
   axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
   axis(side = 2, at = 1:length(df$alpha), labels = 1:length(df$alpha), las = 1, cex.axis = cex.axis)
   
@@ -390,6 +390,7 @@ f_make_graphs <- function(df) {
   par(new = TRUE); plot(x, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
   par(new = TRUE); plot(x-27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
   par(new = TRUE); plot(x+27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
+  mtext(title, side = 3, line = -1.5, outer = TRUE, cex = 1.25)
 }
 ```
 
@@ -404,11 +405,12 @@ results_brown <- alphaScreening(b_ret_mat, control = ctr)
 results_between <- alphaScreening(neutral_ret_mat, control = ctr)
 results_non_disclosed <- alphaScreening(non_disclosed_mat, control = ctr)
 
-results_all %>% f_make_graphs()
-results_green %>% f_make_graphs()
-results_brown %>% f_make_graphs()
-results_between %>% f_make_graphs()
-results_non_disclosed %>% f_make_graphs()
+results_all %>% f_make_graphs("All firms - Returns only")
+results_green %>% f_make_graphs("Green firms - Returns only")
+results_brown %>% f_make_graphs("Brown firms - Returns only")
+results_between %>% f_make_graphs("In-between firms - Returns only")
+results_non_disclosed %>% f_make_graphs("Non-disclosing firms - Returns only")
+
 ```
 `
 #### One-factor model
@@ -419,11 +421,11 @@ results_brown_1f <- alphaScreening(b_ret_mat, factors = one_factor, control = ct
 results_between_1f <- alphaScreening(neutral_ret_mat, factors = one_factor, control = ctr)
 results_non_disclosed_1f <- alphaScreening(non_disclosed_mat, factors = one_factor, control = ctr)
 
-results_all_1f %>% f_make_graphs()
-results_green_1f %>% f_make_graphs()
-results_brown_1f %>% f_make_graphs()
-results_between_1f %>% f_make_graphs()
-results_non_disclosed_1f %>% f_make_graphs()
+results_all_1f %>% f_make_graphs("All firms - One-factor model")
+results_green_1f %>% f_make_graphs("Green firms - O-factor model")
+results_brown_1f %>% f_make_graphs("Brown firms - One-factor model")
+results_between_1f %>% f_make_graphs("In-between firms - One-factor model")
+results_non_disclosed_1f %>% f_make_graphs("Non-disclosing firms - One-factor model")
 ```
 
 #### Three-factor model
@@ -434,11 +436,11 @@ results_brown_3f <- alphaScreening(b_ret_mat, factors = three_factor, control = 
 results_between_3f <- alphaScreening(neutral_ret_mat, factors = three_factor, control = ctr)
 results_non_disclosed_3f <- alphaScreening(non_disclosed_mat, factors = three_factor, control = ctr)
 
-results_all_3f %>% f_make_graphs()
-results_green_3f %>% f_make_graphs()
-results_brown_3f %>% f_make_graphs()
-results_between_3f %>% f_make_graphs()
-results_non_disclosed_3f %>% f_make_graphs()
+results_all_3f %>% f_make_graphs("All firms - Three-factor model")
+results_green_3f %>% f_make_graphs("Green firms - Three-factor model")
+results_brown_3f %>% f_make_graphs("Brown firms - Three-factor model")
+results_between_3f %>% f_make_graphs("In-between firms - Three-factor model")
+results_non_disclosed_3f %>% f_make_graphs("Non-disclosing firms - Three-factor model")
 ```
 
 #### Six-factor model
@@ -449,9 +451,9 @@ results_brown_6f <- alphaScreening(b_ret_mat, factors = six_factor, control = ct
 results_between_6f <- alphaScreening(neutral_ret_mat, factors = six_factor, control = ctr)
 results_non_disclosed_6f <- alphaScreening(non_disclosed_mat, factors = six_factor, control = ctr)
 
-results_all_6f %>% f_make_graphs()
-results_green_6f %>% f_make_graphs()
-results_brown_6f %>% f_make_graphs()
-results_between_6f %>% f_make_graphs()
-results_non_disclosed_6f %>% f_make_graphs()
+results_all_6f %>% f_make_graphs("All firms - Six-factor model")
+results_green_6f %>% f_make_graphs("Green firms - Six-factor model")
+results_brown_6f %>% f_make_graphs("Brown firms - Six-factor model")
+results_between_6f %>% f_make_graphs("In-between firms - Six-factor model")
+results_non_disclosed_6f %>% f_make_graphs("Non-disclosing firms - Six-factor model")
 ```
