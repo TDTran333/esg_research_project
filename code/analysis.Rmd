@@ -22,7 +22,8 @@ library(tidyverse)        # Data manipulation
 library(tidylog)          # Info about dataframe
 library(lubridate)        # Manage dates
 library(broom)            # Tidy stat functions output
-library(summarytools)
+library(summarytools)     # Summary stats
+library(PeerPerformance)  # Alpha screening
 ```
 
 ```{r, include=FALSE}
@@ -88,7 +89,9 @@ sp500 <- sp500 %>%
          ghg_scope_3 = enerdp096 / revt_std, 
          ghg_total = (replace_na(enerdp023, 0) + replace_na(enerdp096,0)) / revt_std,
          ghg_total = na_if(ghg_total, 0),
-         year = year(date))
+         year = year(date),
+         ret_rf = ret - rf,
+         permno = as.numeric(permno))
 
 skimr::skim(sp500)
 descr(sp500)
@@ -134,7 +137,7 @@ sp500 %>%
   geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
   labs(x = "Date",
        y = "Tonnes of CO2-equivalent GHG",
-       title = "Greenhouse Gas Emissions over time: Scope 1 + 2",
+       title = "Greenhouse Gas Emissions over time: Scope 3",
        subtitle = "Ribbon : 25th-75th percentile")
 
 sp500 %>%
@@ -211,16 +214,6 @@ firms_ghg_table %>% select(n_firms_ghg) %>% sum()
 ##### Summary Statistics
 ```{r}
 sp500 %>% 
-  filter(!is.na(enerdp023)) %>% 
-  group_by(year) %>% 
-  count(n_distinct(permno))
-
-sp500 %>% 
-  filter(!is.na(enerdp096)) %>% 
-  group_by(year) %>% 
-  count(n_distinct(permno))
-
-sp500 %>% 
   filter(!is.na(ghg_total) & ghg_total > 0) %>% 
   group_by(year) %>% 
   count(n_distinct(permno))
@@ -228,9 +221,9 @@ sp500 %>%
 sp500_subset <- sp500 %>%
   filter(!is.na(ghg_total),
          year >= 2009 & year != 2018) %>% 
-  mutate(ghg_total = DescTools::Winsorize(ghg_total, probs = c(0.005, 0.995), na.rm = TRUE)) %>% 
+  mutate(ghg_total = DescTools::Winsorize(ghg_total, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   arrange(ghg_total)
-  
+
 sp500_subset %>% 
   group_by(year) %>% 
   summarize(n_distinct(permno))
@@ -245,11 +238,6 @@ sp500_subset %>%
   geom_boxplot() +
   facet_wrap(~year) +
   coord_flip()
-
-sp500_subset %>% 
-  select(date, permno, ghg_total) %>% 
-  group_by(date) %>% 
-  descr()
 
 sp500_subset %>%
   group_by(year, permno) %>%
@@ -276,53 +264,159 @@ sp500_subset %>%
 
 ```
 
-
-
 #### Goals - Week 5
 Run alphaScreening on ESG data
 
-
 #### Factor models:
-One-factor model: MKT
-Three-factor model: MKT, HML,SMB
-Six-factor model: MKT, HML, SMB, RMW, CMA, MOM
+One-factor model: MKT_RF  
+Three-factor model: MKT, HML,SMB  
+Six-factor model: MKT, HML, SMB, RMW, CMA, MOM  
 
-### Setup data for alphaScreening
 ```{r}
 factor_mat <- sp500_subset %>%
-  mutate(mkt = mkt_rf + rf) %>% 
-  select(date, mkt, hml, smb, rmw, cma, mom) %>%
+  select(date, mkt_rf, hml, smb, rmw, cma, mom) %>%
   group_by(date) %>%
-  summarize_all(unique)
+  summarize_all(unique) %>% 
+  select(-date) %>% 
+  summarize(./100) %>% 
+  as.matrix()
 
+one_factor <- factor_mat[,1]
+
+three_factor <- factor_mat[,1:3]
+
+six_factor <- factor_mat
+```
+
+
+### Setup firms return data for alphaScreening
+```{r}
+sp500_subset %>% 
+  select_if(~ !any(is.na(.))) %>% 
+  group_by(permno) %>%
+  select(ret) %>% 
+  count() %>% 
+  ggplot(aes(n)) +
+  geom_bar() +
+  labs(title = "Number of available monthly returns during 2009-2018")
 
 ret_mat <- sp500_subset %>%
-  select(date, permno, ret) %>%
-  mutate(ret = ret / 100) %>%
-  pivot_wider(names_from = permno, values_from = ret) %>%
+  select(date, permno, ret_rf) %>%
+  mutate(ret_rf = ret_rf / 100) %>% 
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
   select_if(~ !any(is.na(.))) %>% 
   select(-date) %>% 
   unnest(cols = c()) %>% 
   as.matrix()
 
+green <- sp500_subset %>% 
+  filter(ghg_total < quantile(ghg_total, 0.25)) %>% 
+  summarize(permno = unique(permno))
 
+g_ret_mat <- sp500_subset %>%
+  filter(permno %in% green[[1]]) %>% 
+  select(date, permno, ret_rf) %>%
+  mutate(ret_rf = ret_rf / 100) %>% 
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select_if(~ !any(is.na(.))) %>% 
+  select(-date) %>% 
+  unnest(cols = c()) %>% 
+  as.matrix()
+
+brown <- sp500_subset %>% 
+  filter(ghg_total > quantile(ghg_total, 0.75)) %>% 
+  summarize(permno = unique(permno))
+
+b_ret_mat <- sp500_subset %>%
+  filter(permno %in% brown[[1]]) %>% 
+  select(date, permno, ret_rf) %>%
+  mutate(ret_rf = ret_rf / 100) %>% 
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select_if(~ !any(is.na(.))) %>% 
+  select(-date) %>% 
+  unnest(cols = c()) %>% 
+  as.matrix()
+
+neutral_ret_mat <- sp500_subset %>%
+  filter(!(permno %in% green[[1]]) & !(permno %in% brown[[1]])) %>% 
+  select(date, permno, ret_rf) %>%
+  mutate(ret_rf = ret_rf / 100) %>% 
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select_if(~ !any(is.na(.))) %>% 
+  select(-date) %>% 
+  unnest(cols = c()) %>% 
+  as.matrix()
+  
+non_disclosed_mat <- sp500 %>%
+  filter(is.na(ghg_total),
+         year >= 2009 & year != 2018) %>%
+  select(date, permno, ret_rf) %>%
+  mutate(ret_rf = ret_rf / 100) %>% 
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select_if(~ !any(is.na(.))) %>% 
+  select(-date) %>% 
+  unnest(cols = c()) %>% 
+  as.matrix()
+  
 ```
+
+## To-do: simplify the code with array
 
 ### alphaScreening
 
+#### Returns only
 ```{r}
-
-
-
-  
-
-
-
-ret_mat %>% descr()
-
 ctr <- list(nCore = 3)
-results_11 <- PeerPerformance::alphaScreening(ret_mat, control = ctr)
+results_all <- alphaScreening(ret_mat, control = ctr)
+
+results_green <- alphaScreening(g_ret_mat, control = ctr)
+
+results_brown <- alphaScreening(b_ret_mat, control = ctr)
+
+results_between <- alphaScreening(neutral_ret_mat, control = ctr)
+
+results_non_disclosed <- alphaScreening(non_disclosed_mat, control = ctr)
 
 ```
 `
+#### One-factor model
+```{r}
+results_all_1f <- alphaScreening(ret_mat, factors = one_factor, control = ctr)
 
+results_green_1f <- alphaScreening(g_ret_mat, factors = one_factor, control = ctr)
+
+results_brown_1f <- alphaScreening(b_ret_mat, factors = one_factor, control = ctr)
+
+results_between_1f <- alphaScreening(neutral_ret_mat, factors = one_factor, control = ctr)
+
+results_non_disclosed_1f <- alphaScreening(non_disclosed_mat, factors = one_factor, control = ctr)
+
+```
+
+#### Three-factor model
+```{r}
+results_all_3f <- alphaScreening(ret_mat, factors = three_factor, control = ctr)
+
+results_green_3f <- alphaScreening(g_ret_mat, factors = three_factor, control = ctr)
+
+results_brown_3f <- alphaScreening(b_ret_mat, factors = three_factor, control = ctr)
+
+results_between_3f <- alphaScreening(neutral_ret_mat, factors = three_factor, control = ctr)
+
+results_non_disclosed_3f <- alphaScreening(non_disclosed_mat, factors = three_factor, control = ctr)
+
+```
+
+#### Six-factor model
+```{r}
+results_all_6f <- alphaScreening(ret_mat, factors = six_factor, control = ctr)
+
+results_green_6f <- alphaScreening(g_ret_mat, factors = six_factor, control = ctr)
+
+results_brown_6f <- alphaScreening(b_ret_mat, factors = six_factor, control = ctr)
+
+results_between_6f <- alphaScreening(neutral_ret_mat, factors = six_factor, control = ctr)
+
+results_non_disclosed_6f <- alphaScreening(non_disclosed_mat, factors = six_factor, control = ctr)
+
+```
