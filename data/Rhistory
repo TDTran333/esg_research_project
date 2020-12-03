@@ -1,0 +1,512 @@
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_belgium = transform_data(EPU_belgium_tmp,country = "BE")
+EPU_wal_tmp <- data.table::rbindlist(content(GET("https://api-dev.sentometrics.com/index/values/epu-wallonia",
+query = list(version="1.4.0",
+frequency="D",
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_wal = transform_data(EPU_wal_tmp,country = "BE")
+Indices = rbind(EPU_belgium[,c(1:4)],
+EPU_flanders[,c(1:4)],
+EPU_wal[,c(1:4)])
+if(all(Indices$value[Indices$timestamp == Sys.Date()] ==0)){
+Indices =  Indices[Indices$timestamp != Sys.Date(),]
+}
+Indices$MA[is.na(Indices$value)] = NA
+colnames(Indices)[1] = "date"
+p <- Indices %>%
+plot_ly(
+type = 'scatter',
+mode = 'lines+markers',
+x = ~date,
+y = ~MA,
+text      = ~paste('Date: ', date, '\n',
+'Index: ', name, '\n',
+'30-day moving average: ', MA, '\n',
+'Daily Value: ', value, '\n'),
+hoverinfo = 'text',
+connectgaps = FALSE,
+transforms = list(
+list(
+type = 'filter',
+target = ~name,
+operation = 'in',
+value = sort(unique(Indices$name))[2]
+)
+)) %>% layout(
+updatemenus = list(
+list(
+type = 'dropdown',
+active = 0,
+buttons = list(
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[1]),
+label = unique(Indices$name)[1]),
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[2]),
+label = unique(Indices$name)[2]),
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[3]),
+label = unique(Indices$name)[3])
+)
+)
+)
+)  %>% layout(autosize=T,height = 700,xaxis = list(rangemode = "tozero",autorange = TRUE),yaxis = list(rangemode = "nonnegative",autorange = TRUE))
+p
+p <- Indices %>%
+plot_ly(
+type = 'scatter',
+mode = 'lines+markers',
+x = ~date,
+y = ~MA,
+text      = ~paste('Date: ', date, '\n',
+'Index: ', name, '\n',
+'30-day moving average: ', MA, '\n',
+'Daily Value: ', value, '\n'),
+hoverinfo = 'text',
+connectgaps = TRUE,
+transforms = list(
+list(
+type = 'filter',
+target = ~name,
+operation = 'in',
+value = sort(unique(Indices$name))[2]
+)
+)) %>% layout(
+updatemenus = list(
+list(
+type = 'dropdown',
+active = 0,
+buttons = list(
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[1]),
+label = unique(Indices$name)[1]),
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[2]),
+label = unique(Indices$name)[2]),
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[3]),
+label = unique(Indices$name)[3])
+)
+)
+)
+)  %>% layout(autosize=T,height = 700,xaxis = list(rangemode = "tozero",autorange = TRUE),yaxis = list(rangemode = "nonnegative",autorange = TRUE))
+p
+p
+Indices$MA[is.na(Indices$MA)] = -99
+p <- Indices %>%
+plot_ly(
+type = 'scatter',
+mode = 'markers',
+x = ~date,
+y = ~MA,
+text      = ~paste('Date: ', date, '\n',
+'Index: ', name, '\n',
+'30-day moving average: ', MA, '\n',
+'Daily Value: ', value, '\n'),
+hoverinfo = 'text',
+connectgaps = TRUE,
+transforms = list(
+list(
+type = 'filter',
+target = ~name,
+operation = 'in',
+value = sort(unique(Indices$name))[2]
+)
+)) %>% layout(
+updatemenus = list(
+list(
+type = 'dropdown',
+active = 0,
+buttons = list(
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[1]),
+label = unique(Indices$name)[1]),
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[2]),
+label = unique(Indices$name)[2]),
+list(method = "restyle",
+args = list("transforms[0].value", unique(Indices$name)[3]),
+label = unique(Indices$name)[3])
+)
+)
+)
+)  %>% layout(autosize=T,height = 700,xaxis = list(rangemode = "tozero",autorange = TRUE),yaxis = list(rangemode = "nonnegative",autorange = TRUE))
+p
+install.packages("bsselectR")
+x = unique(Indices$name)[1]
+state = filter(df, state_name == x)
+index = filter(Indices, state_name == x)
+index = filter(Indices, name == x)
+p <- ggplot(index, aes(x = date,
+y = MA)) +
+geom_smooth(method = "lm") +
+scale_y_continuous(labels = percent_format()) +
+scale_x_continuous(labels = percent_format()) +
+scale_size_continuous(labels = comma_format()) +
+theme_minimal() +
+p
+require(scales)
+p <- ggplot(index, aes(x = date,
+y = MA)) +
+geom_smooth(method = "lm") +
+scale_y_continuous(labels = percent_format()) +
+scale_x_continuous(labels = percent_format()) +
+scale_size_continuous(labels = comma_format()) +
+theme_minimal() +
+p
+p <- ggplot(index, aes(x = date,
+y = MA)) +
+geom_smooth(method = "lm") +
+scale_y_continuous(labels = percent_format()) +
+scale_x_continuous(labels = percent_format()) +
+scale_size_continuous(labels = comma_format()) +
+theme_minimal()
+p
+str(indices)
+index(index)
+str(index)
+p <- ggplot(index, aes(x = date,
+y = MA)) +
+geom_smooth(method = "lm") +
+theme_minimal()
+p
+p <- ggplot(index, aes(x = date,
+y = MA)) +
+theme_minimal()
+p
+index
+index$MA
+auth <- POST("https://api-dev.sentometrics.com/token",
+body = list(username=Sys.getenv("sento_username"),
+password=Sys.getenv("sento_password")))
+EPU_flanders_tmp <- data.table::rbindlist(content(GET("https://api-dev.sentometrics.com/index/values/epu-flanders",
+query = list(version="1.4.0",
+frequency="D",
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_flanders = transform_data(EPU_flanders_tmp,country = "BE")
+EPU_belgium_tmp <- data.table::rbindlist(content(GET("https://api-dev.sentometrics.com/index/values/epu-belgium",
+query = list(version="1.4.0",
+frequency="D",
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_belgium = transform_data(EPU_belgium_tmp,country = "BE")
+EPU_wal_tmp <- data.table::rbindlist(content(GET("https://api-dev.sentometrics.com/index/values/epu-wallonia",
+query = list(version="1.4.0",
+frequency="D",
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_wal = transform_data(EPU_wal_tmp,country = "BE")
+Indices = rbind(EPU_belgium[,c(1:4)],
+EPU_flanders[,c(1:4)],
+EPU_wal[,c(1:4)])
+if(all(Indices$value[Indices$timestamp == Sys.Date()] ==0)){
+Indices =  Indices[Indices$timestamp != Sys.Date(),]
+}
+Indices$MA[is.na(Indices$value)] = NA
+colnames(Indices)[1] = "date"
+p <- ggplot(index, aes(x = date,
+y = MA)) + geom_point() + geom_line()
+p
+index = filter(Indices, name == x)
+p <- ggplot(index, aes(x = date,
+y = MA)) + geom_point() + geom_line()
+p
+p <- ggplot(index, aes(x = date,
+y = MA), text=paste('</br>Index: ',name,'</br>Date: ',date, '</br>30-day moving average: ',MA,'</br>daily value: ',value)) + geom_point() + geom_line()
+p
+p = ggplotly(p,tooltip = c("text"))
+P
+p
+p <- ggplot(index, aes(x = date,
+y = MA), text=paste('</br>Index: ',name,'</br>Date: ',date, '</br>30-day moving average: ',MA,'</br>daily value: ',value)) + geom_point() + geom_line()
+p <- ggplot(index, aes(x = date,
+y = MA), text=paste('</br>Index: ',name,'</br>Date: ',date, '</br>30-day moving average: ',MA,'</br>daily value: ',value)) + geom_point() + geom_line() +
+theme_minimal()
+p = ggplotly(p,tooltip = c("text"))
+p
+p <- ggplot(index, aes(x = date,
+y = MA), text=paste('</br>Index: ',name,'</br>Date: ',date, '</br>30-day moving average: ',MA,'</br>daily value: ',value)) + geom_point() + geom_line() +
+theme_minimal()
+p = ggplotly(p, tooltip = c("text"))
+p
+p <- ggplot(index, aes(x = date,
+y = MA)) + geom_point(aes(text=paste('</br>Index: ',name,'</br>Date: ',date, '</br>30-day moving average: ',MA,'</br>daily value: ',value))) + geom_line() +
+theme_minimal()
+p = ggplotly(p, tooltip = c("text"))
+p
+plots <- lapply(unique(Indices$name), function(x) {
+index = filter(Indices, name == x)
+p <- ggplot(index, aes(x = date,
+y = MA)) + geom_point(aes(text=paste('</br>Index: ',name,'</br>Date: ',date, '</br>30-day moving average: ',MA,'</br>daily value: ',value))) + geom_line() +
+theme_minimal()
+p = ggplotly(p, tooltip = c("text"))
+})
+plots[[1]]
+plots[[2]]
+plots[[3]]
+require(bsselect)
+install.packages("bsselect")
+bsselect
+install.packages("bsselectR")
+bsselect
+bsselectR
+devtools::install_github("walkerke/bsselectR")
+devtools::install_github("walkerke/bsselectR")
+devtools::install_github("walkerke/bsselectR")
+devtools::install_github("walkerke/bsselectR" force = TRUE)
+devtools::install_github("walkerke/bsselectR", force = TRUE)
+devtools::install_github("walkerke/bsselectR")
+devtools::install_github("walkerke/bsselectR", force = TRUE)
+load("E:/Dropbox/Clement-Keven-David/Indices_databases/SPX_database/saved_data/saved_data.RData")
+saved_data$const_hist
+saved_data$const_nb_hist
+saved_data$const_ID
+saved_data$const_ind
+saved_data$const_ind[,1]
+saved_data$const_ind[,2]
+saved_data$const_ind[,3]
+saved_data$const_ind[,4]
+colSums(saved_data$const_ind)
+rowSums(saved_data$const_ind)
+plot(rowSums(saved_data$const_ind))
+hist(saved_data$const_volume)
+max(saved_data$const_volume)
+min(saved_data$const_volume)
+max(saved_data$const_volume,na.rm = TRUE)
+min(saved_data$const_volume,na.rm = TRUE)
+sort(saved_data$const_volume)
+sort(saved_data$const_volume,decreasing = TRUE)
+sort(saved_data$const_volume*saved_data$const_ind,decreasing = TRUE)
+saved_data$const_ind
+plot(saved_data$const_volume[,1])
+plot(saved_data$const_volume[,2])
+plot(saved_data$const_volume[,3])
+plot(saved_data$const_volume[,4])
+plot(saved_data$const_volume[,5])
+plot(saved_data$const_volume[,10])
+plot(saved_data$const_volume[,11])
+plot(saved_data$const_volume[,12])
+hist(saved_data$const_prices_adj)
+hist(diff(log(saved_data$const_prices_adj)))
+apply(log(saved_data$const_prices_adj),2,diff)
+hist(apply(log(saved_data$const_prices_adj),2,diff))
+min(apply(log(saved_data$const_prices_adj),2,diff))
+min(apply(log(saved_data$const_prices_adj),2,diff),na.rm = TRUE)
+log_ret = apply(log(saved_data$const_prices_adj),2,diff)
+plot(log_ret[,1])
+plot(log_ret[,2])
+which(min(log_ret),arr.ind = TRUE)
+which(log_ret == min(log_ret),arr.ind = TRUE)
+which(log_ret == min(log_ret,na.rm = TRUE),arr.ind = TRUE)
+plot(log_ret[,1158])
+require(xts)
+require(zo)
+require(zoo)
+log_ret = apply(log(saved_data$const_prices_adj),2,diff)
+plot(log_ret[,1158])
+rownames(log_ret)
+plot(log_ret[,1158,drop = FALSE])
+dat_error = log_ret[,1158,drop = FALSE]
+dat_error
+saved_data$const_prices_adj[,1158]
+head(saved_data$const_prices_adj)
+head(saved_data$const_prices_adj[,1158])
+plot(saved_data$const_ind[,1158])
+dat_error = log_ret[,1158,drop = FALSE]
+plot(saved_data$const_prices_adj[,1158])
+plot(saved_data$const_ind[,1])
+plot(saved_data$const_ind[,2])
+plot(saved_data$const_ind[,3])
+plot(saved_data$const_prices_adj[,1])
+plot(saved_data$const_prices_adj[,2])
+plot(saved_data$const_prices_adj[,3])
+plot(saved_data$const_prices_adj[,4])
+colSums(saved_data$const_ind)
+hist(colSums(saved_data$const_ind))
+hist(colSums(saved_data$const_ind),100)
+hist(colSums(saved_data$const_ind),1000)
+sort(colSums(saved_data$const_ind))
+sort(colSums(saved_data$const_ind))
+sort(colSums(saved_data$const_ind),decreasing = TRUE)
+sort(colSums(saved_data$const_ind))
+plot(saved_data$const_prices_adj[," BIO"])
+plot(saved_data$const_prices_adj[,"BIO"])
+plot(saved_data$const_ind[,"BIO"])
+plot(saved_data$const_ind[,"SVFI"])
+plot(saved_data$const_ind[," ZTS-W"])
+plot(saved_data$const_ind[,"ZTS-W"])
+id.rm = colSums(saved_data$const_ind) < 20
+id.rm = colSums(saved_data$const_ind) >= 20
+log_ret = log_ret[,id.rm]
+volume = saved_data$const_volume[,id.rm]
+hist(volume)
+volume
+id.rm
+hist(log_ret)
+which(log_ret == min(log_ret,na.rm = TRUE))
+which(log_ret == min(log_ret,na.rm = TRUE),arr.ind = TRUE)
+exp(-6)
+1-exp(-6)
+which(log_ret == min(log_ret,na.rm = TRUE),arr.ind = TRUE)
+plot(log_ret[,184])
+saved_data$const_ind[,!id.rm][,184]
+saved_data$const_ind[,!id.rm][,184]
+saved_data$const_ind[,!id.rm]
+id = saved_data$const_ind[,!id.rm]
+id[,184]
+id
+str(id)
+id = saved_data$const_ind[,id.rm]
+id[,184]
+plot(id[,184])
+library(httr)
+library(data.table)
+library(plotly)
+library(RcppRoll)
+library(lubridate)
+library(timeDate)
+Holidays = function(country, start, end){
+year = unique(lubridate::year(  seq(start, end, by = 1)))
+easter = timeDate::Easter(year)
+if(country == "BE"){
+easter = as.Date(easter)
+holiday = easter
+holiday = c(holiday, easter+1)
+holiday = c(holiday, easter+39)
+holiday = c(holiday, easter+49)
+holiday = c(holiday, easter+50)
+holiday = c(holiday,
+as.Date(paste0(year,"-05-01")),
+as.Date(paste0(year,"-07-21")),
+as.Date(paste0(year,"-08-15")),
+as.Date(paste0(year,"-11-01")),
+as.Date(paste0(year,"-11-11")),
+as.Date(paste0(year,"-12-25")))
+}
+return(as.Date(holiday))
+}
+transform_data = function(x, country){
+start = as.Date("2000-01-01")
+end = as.Date(Sys.time())
+dates_total = seq(start, end, by = 1)
+dat  = data.frame(timestamp = dates_total)
+x$timestamp =as.Date(x$timestamp)
+id.match = match(dat$timestamp,x$timestamp)
+dat$name = x$name[1]
+dat$value[!is.na(id.match)] = x$value
+dat$value[is.na(dat$value)] = 0
+dat$value[lubridate::wday(dat$timestamp) == 1] = NA
+if(dat$name[1] == "epu-wallonia"){
+dat$value[lubridate::year(dat$timestamp) == 2006] = NA
+}
+holiday = Holidays(country = country, start = start,end = end)
+dat$value[!is.na(match(dat$timestamp, holiday))] = NA
+dat$MA = NA
+dat$ind = NA
+dat$MA[-1:-29] = RcppRoll::roll_mean(dat$value, 30,na.rm = TRUE)
+dat$ind[-1:-29] = RcppRoll::roll_sum(!is.na(dat$value), 30,na.rm = TRUE)
+dat = dat[-1:-29,]
+dat$MA[lubridate::wday(dat$timestamp) == 1] = NA
+dat$MA[dat$ind < 20] = NA
+dat$value[lubridate::wday(dat$timestamp) == 1] = NA
+dat$MA[!is.na(match(dat$timestamp, holiday))] = NA
+dat = dat[-1,]
+return(dat)
+}
+auth <- POST("https://api-dev.sentometrics.com/token",
+body = list(username=Sys.getenv("sento_username"),
+password=Sys.getenv("sento_password")))
+EPU_flanders_tmp <- data.table::rbindlist(content(GET("https://api-dev.sentometrics.com/index/values/epu-flanders",
+query = list(version="1.4.0",
+frequency="D",
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_flanders = transform_data(EPU_flanders_tmp, country = "BE")
+EPU_belgium_tmp <- data.table::rbindlist(content(GET("https://api-dev.sentometrics.com/index/values/epu-belgium",
+query = list(version="1.4.0",
+frequency="D",
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_belgium = transform_data(EPU_belgium_tmp, country = "BE")
+EPU_wal_tmp <- data.table::rbindlist(content(GET("https://api-dev.sentometrics.com/index/values/epu-wallonia",
+query = list(version="1.4.0",
+frequency="D",
+start= "2000-01-01",
+end= as.character(as.Date(Sys.time()))),
+add_headers(Authorization = paste0("Bearer ", content(auth)$access_token)))))
+EPU_wal = transform_data(EPU_wal_tmp, country = "BE")
+Indices = data.frame(EPU_belgium[,c(1:2)],
+epu_belgium_MA = EPU_belgium[,"MA"],
+epu_belgium_DV = EPU_belgium[,"value"],
+epu_flanders_MA = EPU_flanders[,"MA"],
+epu_flanders_DV = EPU_flanders[,"value"],
+epu_walloon_MA = EPU_wal[,"MA"],
+epu_walloon_DV = EPU_wal[,"value"])
+tail(Indices)
+install.packages("reticulate")
+install.packages("lubridate")
+install.packages("data.table")
+install.packages("stringr")
+install.packages("tokenizers")
+install.packages("sentometrics")
+install.packages("timeDate")
+reticulate::install_miniconda()
+reticulate::conda_create(envname = "sentometrics")
+reticulate::use_miniconda(condaenv = "sentometrics")
+reticulate::py_config()
+reticulate::use_miniconda(condaenv = "sentometrics")
+reticulate::py_config()
+reticulate::py_config()
+reticulate::py_install("numpy",envname = "sentometrics")
+reticulate::use_miniconda(condaenv = "sentometrics")
+reticulate::py_config()
+reticulate::use_miniconda(condaenv = "sentometrics",required = TRUE)
+reticulate::py_config()
+iinstall.packages("dplyr")
+install.packages("dplyr")
+install.packages("dplyr")
+load("E:/Dropbox/05 Working Paper/ArdiaBluteauBoudtIngelbrecht/R/DATA/CAI_daily.rda")
+load("E:/Dropbox/05 Working Paper/ArdiaBluteauBoudtIngelbrecht/R/DATA/PRICE DATA/CorpDataFactorsENVSCOREExpMonthDay.rda")
+data = CorpData[,c("PERMNO","DATE","Ret","Prc","Cap","REVT_STD","SPMIM","ENERDP023","ENERDP096","ENVSCORE","Mkt.RF","RF","HML","SMB","CMA","RMW","UMD")]
+data$Ret = data$Ret*100
+getwd()
+load("E:/Dropbox/05 Working Paper/ArdiaBluteauBoudtIngelbrecht/R/DATA/PRICE DATA/CorpDataDailyAll.rda")
+data_monthly = data
+data = CorpDataDaily[,c("PERMNO","DATE","Ret","Prc","Cap","REVT_STD","SPMIM","ENERDP023","ENERDP096","ENVSCORE","Mkt.RF","RF","HML","SMB","CMA","RMW","UMD")]
+data = CorpDataDaily[,c("PERMNO","DATE","Ret","Prc","Cap","REVT_STD","SPMIM","ENERDP023","ENERDP096","ENVSCORE","Mkt.Rf","Rf","HML","SMB","CMA","RMW","UMD")]
+data = CorpDataDaily[,c("PERMNO","DATE","Ret","Prc","REVT_STD","SPMIM","ENERDP023","ENERDP096","ENVSCORE","Mkt.Rf","Rf","HML","SMB","CMA","RMW","UMD")]
+data$Ret = data$Ret*100
+data_daily= data
+setwd("E:/Dropbox/project (2)/data")
+save(data_monthly,file = "monthly_data.rda")
+save(data_daily,file = "daily_data.rda")
+load("E:/PERMNO/NEWS/23317.rda")
+news$news$text[1]
+news$news$text[2]
+news$news$text[1000]
+news$news$origin
+table(news$news$origin)
+sort(table(news$news$origin))
+load("E:/PERMNO/NEWS/75825.rda")
+table(news$news$origin)
+sort(table(news$news$origin))
+sort(table(news$news$pubTypes))
+load("E:/PERMNO/NEWS_DUP_PF/75825.rda")
+sort(table(news$news$pubTypes))
+news$news$date
+sort(news$news$date0
+sort(news$news$date)
+load("E:/PERMNO/NEWS_DUP_PF/23317.rda")
+sort(news$news$date)
+sort(table(news$news$pubTypes))
+sort(table(news$news$origin))

@@ -1,0 +1,328 @@
+---
+title: "ESG analysis"
+author: "TTD"
+date: "24/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{css}
+blockquote {
+    font-size: 14px;
+}
+```
+
+### Load Libraries
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(here)             # Relative paths
+library(tidyverse)        # Data manipulation
+library(tidylog)          # Info about dataframe
+library(lubridate)        # Manage dates
+library(broom)            # Tidy stat functions output
+library(summarytools)
+```
+
+```{r, include=FALSE}
+source(here("function", "ggplot_theme_Publication-2.R"))
+theme_set(theme_Publication())
+```
+
+### Load Data
+```{r, echo=TRUE}
+load(here("data", "monthly_data.rda"))
+
+firms <- as_tibble(janitor::clean_names(data_monthly))
+
+sp500 <- firms %>% 
+  filter(spmim == 10) %>% 
+  rename(mom = umd)
+```
+### Data Info
+
+| variable  | type | details                                      |  
+|-----------|------|----------------------------------------------|  
+| permno    | chr  | firm id                                      |  
+| date      | date | date                                         |  
+| ret       | dbl  | return pct                                   |  
+| prc       | dbl  | price (negative price = NA)                  |  
+| cap       | dbl  | mkt cap                                      |  
+| revt_std  | dbl  | standardized revenues                        |  
+| spmim     | dbl  | sp id: sp500 (10) / sp400 (91) / sp600 (92)  |  
+| enerdp023 | dbl  | scope 1 and scope CO2 emission               |  
+| enerdp096 | dbl  | scope 3 CO2 emission                         |  
+| envscore  | dbl  | env score by refinitiv                       |  
+| mkt_rf    | dbl  | mkt premium                                  |  
+| rf        | dbl  | risk-free                                    |  
+| hml       | dbl  | high minus low (value factor)                |  
+| smb       | dbl  | small minus big (small cap factor)           |  
+| cma       | dbl  | cons mins aggr (investment factor)           |  
+| rmw       | dbl  | robus minus weak (profitability factor)      |  
+| mom       | dbl  | up minus down (momentum factor)              |  
+
+#### From Ardia_et_al(2020) research paper on Climate change concerns:  
+>To quantify a firm's greenness, we rely on the ASSET4/Refinitiv CO2
+(carbon dioxide) equivalent greenhouse gas (GHG) emissions data scaled by
+the firms' revenue.
+>Firms whose variable is below (above) the 25th (75th) percentile on
+a given day are defined as green (brown) firms.
+>GHG emissions are typically reported with a one-year delay.
+
+#### Data Sources
+CO2 emissions comes from **ASSET4**.  
+Revenues comes from **Compustat**.  
+Environment scores comes from **Refinitiv**.  
+5 Mkt Factor model comes from **Fama-French**.  
+Firm returns and price comes from **Datastream**.
+
+To do potentially:  
+- Add industry data.  
+- Add score ratings.  
+
+### Data Summary
+```{r, warning=FALSE}
+sp500 <- sp500 %>%
+  mutate(ghg_scope_1_2 = enerdp023 / revt_std, 
+         ghg_scope_3 = enerdp096 / revt_std, 
+         ghg_total = (replace_na(enerdp023, 0) + replace_na(enerdp096,0)) / revt_std,
+         ghg_total = na_if(ghg_total, 0),
+         year = year(date))
+
+skimr::skim(sp500)
+descr(sp500)
+```
+
+### Data Visualization
+```{r message=FALSE, results=FALSE}
+
+f_summarize_data <- function(df, x) {
+  {{ df }} %>%
+    group_by(date) %>%
+    filter(!is.na({{ x }})) %>%
+    summarize(avg = mean({{ x }}),
+              median = median({{ x }}),
+              q25 = quantile({{ x }}, 0.25),
+              q75 = quantile({{ x }}, 0.75))
+}
+
+sp500 %>%
+  f_summarize_data(enerdp023) %>%
+  ggplot(aes(date, median)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  labs(x = "Date",
+       y = "Tonnes of CO2-equivalent GHG",
+       title = "Greenhouse Gas Emissions over time: Scope 1 + 2",
+       subtitle = "Ribbon : 25th-75th percentile")
+
+sp500 %>%
+  f_summarize_data(ghg_scope_1_2) %>%
+  ggplot(aes(date, median)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  labs(x = "Date",
+       y = "Tonnes of CO2-equivalent GHG",
+       title = "Greenhouse Gas Emissions Intensity over time: Scope 1 + 2",
+       subtitle = "Ribbon : 25th-75th percentile")
+
+sp500 %>%
+  f_summarize_data(enerdp096) %>%
+  ggplot(aes(date, median)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  labs(x = "Date",
+       y = "Tonnes of CO2-equivalent GHG",
+       title = "Greenhouse Gas Emissions over time: Scope 1 + 2",
+       subtitle = "Ribbon : 25th-75th percentile")
+
+sp500 %>%
+  f_summarize_data(ghg_scope_3) %>%
+  ggplot(aes(date, median)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  labs(x = "Date",
+       y = "Tonnes of CO2-equivalent GHG",
+       title = "Greenhouse Gas Emissions Intensity over time : Scope 3",
+       subtitle = "Ribbon : 25th-75th percentile")
+
+sp500 %>%
+  f_summarize_data(ghg_total) %>%
+  ggplot(aes(date, median)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  labs(x = "Date",
+       y = "Tonnes of CO2-equivalent GHG",
+       title = "Greenhouse Gas Emissions Intensity over time : Total",
+       subtitle = "Ribbon : 25th-75th percentile")
+
+sp500 %>%
+  f_summarize_data(envscore) %>%
+  ggplot(aes(date, median)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  labs(x = "Date",
+       y = "Environment score",
+       title = "Environment score over time",
+       subtitle = "Ribbon : 25th-75th percentile")
+```
+
+
+#### Goals - Week 4
+Reproduce paper descriptive data on p.29, "Table 3"  
+- Percentage of firms with emission data  
+- Summary statistics  
+
+### Data Analysis
+
+##### Count number of firms per year
+```{r, message=FALSE}
+firms_ghg <- sp500 %>%
+  group_by(year) %>%
+  mutate(n_obs = n(),
+         n_firms = n_distinct(permno)) %>% 
+  ungroup() %>% 
+  filter(!is.na(enerdp023) | !is.na(enerdp096)) %>%
+  group_by(year) %>% 
+  mutate(n_obs_ghg = n(),
+         n_firms_ghg_data = n_distinct(permno),
+         pct_firms_ghg_data = (n_firms_ghg_data / n_firms) * 100)
+
+firms_ghg_table <- firms_ghg %>% 
+  select(year, n_obs, n_obs_ghg, n_firms, n_firms_ghg_data, pct_firms_ghg_data) %>%
+  filter(year >= 2009 & year != 2018) %>% 
+  group_by(year) %>% 
+  summarize(n_obs         = mean(n_obs),
+            n_obs_ghg     = mean(n_obs_ghg),
+            n_firms       = mean(n_firms),
+            n_firms_ghg   = mean(n_firms_ghg_data),
+            pct_firms_ghg = mean(pct_firms_ghg_data))
+
+firms_ghg_table %>% 
+  knitr::kable(caption = "Percent of firms with ghg data.",
+               align = "c",
+               digits = 2,
+               booktabs = TRUE)
+
+firms_ghg_table %>% select(n_firms_ghg) %>% sum()
+```
+
+##### Summary Statistics
+```{r}
+sp500 %>% 
+  filter(!is.na(enerdp023)) %>% 
+  group_by(year) %>% 
+  count(n_distinct(permno))
+
+sp500 %>% 
+  filter(!is.na(enerdp096)) %>% 
+  group_by(year) %>% 
+  count(n_distinct(permno))
+
+sp500 %>% 
+  filter(!is.na(ghg_total) & ghg_total > 0) %>% 
+  group_by(year) %>% 
+  count(n_distinct(permno))
+
+sp500_subset <- sp500 %>%
+  filter(!is.na(ghg_total),
+         year >= 2009 & year != 2018) %>% 
+  mutate(ghg_total = DescTools::Winsorize(ghg_total, probs = c(0.005, 0.995), na.rm = TRUE)) %>% 
+  arrange(ghg_total)
+  
+sp500_subset %>% 
+  group_by(year) %>% 
+  summarize(n_distinct(permno))
+
+sp500_subset %>% 
+  select(year, permno, ghg_total) %>% 
+  group_by(year) %>% 
+  descr()
+
+sp500_subset %>% 
+  ggplot(aes(ghg_total)) +
+  geom_boxplot() +
+  facet_wrap(~year) +
+  coord_flip()
+
+sp500_subset %>% 
+  select(date, permno, ghg_total) %>% 
+  group_by(date) %>% 
+  descr()
+
+sp500_subset %>%
+  group_by(year, permno) %>%
+  summarize(avg_firm_ghg_year = mean(ghg_total)) %>%
+  ungroup() %>%
+  select(avg_firm_ghg_year) %>%
+  descr() %>%
+  knitr::kable(caption = "GHG data",
+               align = "c",
+               digits = 2,
+               booktabs = TRUE)
+
+sp500_subset %>% 
+  filter(!is.na(envscore)) %>% 
+  group_by(year, permno) %>%
+  summarize(avg_firm_envscore_year = mean(envscore)) %>%
+  ungroup() %>%
+  select(avg_firm_envscore_year) %>% 
+  descr() %>% 
+  knitr::kable(caption = "Environment score data",
+               align = "c",
+               digits = 2,
+               booktabs = TRUE)
+
+```
+
+
+
+#### Goals - Week 5
+Run alphaScreening on ESG data
+
+
+#### Factor models:
+One-factor model: MKT
+Three-factor model: MKT, HML,SMB
+Six-factor model: MKT, HML, SMB, RMW, CMA, MOM
+
+### Setup data for alphaScreening
+```{r}
+factor_mat <- sp500_subset %>%
+  mutate(mkt = mkt_rf + rf) %>% 
+  select(date, mkt, hml, smb, rmw, cma, mom) %>%
+  group_by(date) %>%
+  summarize_all(unique)
+
+
+ret_mat <- sp500_subset %>%
+  select(date, permno, ret) %>%
+  mutate(ret = ret / 100) %>%
+  pivot_wider(names_from = permno, values_from = ret) %>%
+  select_if(~ !any(is.na(.))) %>% 
+  select(-date) %>% 
+  unnest(cols = c()) %>% 
+  as.matrix()
+
+
+```
+
+### alphaScreening
+
+```{r}
+
+
+
+  
+
+
+
+ret_mat %>% descr()
+
+ctr <- list(nCore = 3)
+results_11 <- PeerPerformance::alphaScreening(ret_mat, control = ctr)
+
+```
+`
+
