@@ -412,7 +412,7 @@ results_between %>% f_make_graphs("In-between firms - Returns only")
 results_non_disclosed %>% f_make_graphs("Non-disclosing firms - Returns only")
 
 ```
-`
+
 #### One-factor model
 ```{r}
 results_all_1f <- alphaScreening(ret_mat, factors = one_factor, control = ctr)
