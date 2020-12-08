@@ -2,4 +2,6 @@
 .RData
 .Rproj.user
 references/
-data/daily_data.rda
+data/daily_data.Rda
+data/daily_data_2.Rda
+data/dly_data.Rda
