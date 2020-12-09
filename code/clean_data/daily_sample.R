@@ -1,32 +1,30 @@
 library(tidyverse)
 library(lubridate)
 
-load(here::here("data", "daily_data.rda"))
-
-data_daily <- data_daily %>%
-  janitor::clean_names() %>%
-  filter(year(date) >= 2009,
-         year(date) <= 2017)
-
-# Factors Data ------------------------------------------------------------
-
-dly_factor <- data_daily %>%
-  select(date, mkt_rf:umd) %>%
-  mutate(mom = umd) %>%
-  select(-rf, -umd) %>%
-  group_by(date) %>%
-  summarize(across(everything(), mean))
-
-save(dly_factor, file = here::here("data", "2009_2017", "dly_factor.Rda"))
-
-# Firm Data ---------------------------------------------------------------
-
-daily_data_2 <- data_daily %>%
-  select(-mkt_rf, -(hml:umd))
-
-save(daily_data_2, file = here::here("data", "2009_2017", "daily_data_2.Rda"))
-
----
+# load(here::here("data", "daily_data.rda"))
+# 
+# data_daily <- data_daily %>%
+#   janitor::clean_names() %>%
+#   filter(year(date) >= 2009,
+#          year(date) <= 2017)
+# 
+# # Factors Data ------------------------------------------------------------
+# 
+# dly_factor <- data_daily %>%
+#   select(date, mkt_rf:umd) %>%
+#   mutate(mom = umd) %>%
+#   select(-rf, -umd) %>%
+#   group_by(date) %>%
+#   summarize(across(everything(), mean))
+# 
+# save(dly_factor, file = here::here("data", "2009_2017", "dly_factor.Rda"))
+# 
+# # Firm Data ---------------------------------------------------------------
+# 
+# daily_data_2 <- data_daily %>%
+#   select(-mkt_rf, -(hml:umd))
+# 
+# save(daily_data_2, file = here::here("data", "2009_2017", "daily_data_2.Rda"))
 
 load(here::here("data", "2009_2017", "daily_data_2.rda"))
 
@@ -36,6 +34,7 @@ dly_data <- daily_data_2 %>%
            ret_rf = ret - rf,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
+  mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore)
 
 save(dly_data, file = here::here("data", "2009_2017", "dly_data.Rda"))
@@ -49,6 +48,7 @@ dly_data_sp <- daily_data_2 %>%
          ret_rf = ret - rf,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
+  mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore, spmim)
 
 save(dly_data_sp, file = here::here("data", "2009_2017", "dly_data_sp.Rda"))

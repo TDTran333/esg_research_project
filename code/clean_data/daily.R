@@ -22,8 +22,6 @@ library(tidyverse)
 # 
 # save(daily_data_2, file = here::here("data", "all", "daily_data_2.Rda"))
 
----
-
 load(here::here("data", "all", "daily_data_2.rda"))
 
 dly_data <- daily_data_2 %>%
@@ -32,6 +30,7 @@ dly_data <- daily_data_2 %>%
            ret_rf = ret - rf,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
+  mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore)
 
 save(dly_data, file = here::here("data", "all", "dly_data.Rda"))
@@ -45,6 +44,7 @@ dly_data_sp <- daily_data_2 %>%
          ret_rf = ret - rf,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
+  mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore, spmim)
 
 save(dly_data_sp, file = here::here("data", "all", "dly_data_sp.Rda"))

@@ -23,6 +23,7 @@ mthly_data <- data_monthly %>%
            ret_rf = ret - rf,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
+  mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore)
 
 save(mthly_data, file = here::here("data", "all", "mthly_data.Rda"))
@@ -36,13 +37,14 @@ mthly_data_sp <- data_monthly %>%
          ret_rf = ret - rf,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
+  mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore, spmim)
 
 save(mthly_data_sp, file = here::here("data", "all", "mthly_data_sp.Rda"))
 
 # Counting observations ---------------------------------------------------
 
-tbl <- matrix(data = NA, nrow = 6, ncol = 3)
+tbl <- matrix(data = NA, nrow = 7, ncol = 3)
 
 data_monthly %>% 
   count() %>%
@@ -54,61 +56,84 @@ data_monthly %>%
   as.matrix() -> tbl[1,2]
 
 data_monthly %>% 
+  filter(!is.na(enerdp023)) %>%
+  count() %>%
+  as.matrix() -> tbl[2,1]
+
+data_monthly %>% 
+  filter(!is.na(spmim)) %>%
+  filter(!is.na(enerdp023)) %>%
+  count() %>%
+  as.matrix() -> tbl[2,2]
+
+data_monthly %>% 
+  filter(!is.na(enerdp096)) %>%
+  count() %>%
+  as.matrix() -> tbl[3,1]
+
+data_monthly %>% 
+  filter(!is.na(spmim)) %>%
+  filter(!is.na(enerdp096)) %>%
+  count() %>%
+  as.matrix() -> tbl[3,2]
+
+data_monthly %>% 
   select(permno) %>% 
   distinct() %>% 
   count() %>%
-  as.matrix() -> tbl[2,1]
+  as.matrix() -> tbl[4,1]
 
 data_monthly %>% 
   filter(!is.na(spmim)) %>%
   select(permno) %>%
   distinct() %>%
   count() %>%
-  as.matrix() -> tbl[2,2]
-
-data_monthly %>% 
-  filter(!is.na(enerdp023)) %>%
-  count() %>%
-  as.matrix() -> tbl[3,1]
-
-data_monthly %>% 
-  filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp023)) %>%
-  count() %>%
-  as.matrix() -> tbl[3,2]
-
-data_monthly %>% 
-  filter(!is.na(enerdp096)) %>%
-  count() %>%
-  as.matrix() -> tbl[4,1]
-
-data_monthly %>% 
-  filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp096)) %>%
-  count() %>%
   as.matrix() -> tbl[4,2]
 
 data_monthly %>% 
-  filter(!is.na(enerdp023) | !is.na(enerdp096)) %>%
+  filter(!is.na(enerdp023)) %>%
+  select(permno) %>%
+  distinct() %>%
   count() %>%
   as.matrix() -> tbl[5,1]
 
 data_monthly %>% 
   filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp023) | !is.na(enerdp096)) %>%
+  filter(!is.na(enerdp023)) %>%
+  select(permno) %>%
+  distinct() %>%
   count() %>%
   as.matrix() -> tbl[5,2]
 
 data_monthly %>% 
-  filter(!is.na(enerdp023) & !is.na(enerdp096)) %>%
+  filter(!is.na(enerdp096)) %>%
+  select(permno) %>%
+  distinct() %>%
   count() %>%
   as.matrix() -> tbl[6,1]
 
 data_monthly %>% 
   filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp023) & !is.na(enerdp096)) %>%
+  filter(!is.na(enerdp096)) %>%
+  select(permno) %>%
+  distinct() %>%
   count() %>%
   as.matrix() -> tbl[6,2]
+
+data_monthly %>% 
+  filter(!is.na(enerdp023) & !is.na(enerdp096)) %>%
+  select(permno) %>%
+  distinct() %>%
+  count() %>%
+  as.matrix() -> tbl[7,1]
+
+data_monthly %>% 
+  filter(!is.na(spmim)) %>%
+  filter(!is.na(enerdp023) & !is.na(enerdp096)) %>%
+  select(permno) %>%
+  distinct() %>%
+  count() %>%
+  as.matrix() -> tbl[7,2]
 
 tbl[, 3] <- tbl[, 2] / tbl[, 1]
 
