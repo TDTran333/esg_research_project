@@ -1,124 +1,126 @@
+
+# Options -----------------------------------------------------------------
+
+start <- "2009"
+end   <- "2017"
+
+mainDir <- here::here("data")
+subDir <- paste0(start, "-", end)
+
+ifelse(!dir.exists(file.path(mainDir, subDir)), dir.create(file.path(mainDir, subDir)), FALSE)
+
+# Load Data ---------------------------------------------------------------
+
 library(tidyverse)
+library(lubridate)
 
-# load(here::here("data", "daily_data.rda"))
-# data_daily <- data_daily %>%
-#   janitor::clean_names()
-# 
-# # Factors Data ------------------------------------------------------------
-# 
-# dly_factor <- data_daily %>%
-#   select(date, mkt_rf:umd) %>% 
-#   mutate(mom = umd) %>%
-#   select(-rf, -umd) %>% 
-#   group_by(date) %>% 
-#   summarize(across(everything(), mean))
-# 
-# save(dly_factor, file = here::here("data", "all", "dly_factor.Rda"))
-# 
-# # Firm Data ---------------------------------------------------------------
-# 
-# daily_data_2 <- data_daily %>% 
-#   select(-mkt_rf, -(hml:umd))
-# 
-# save(daily_data_2, file = here::here("data", "all", "daily_data_2.Rda"))
+load(here::here("data", "daily_data.rda"))
+data_daily <- data_daily %>%
+  janitor::clean_names() %>% 
+  as_tibble()
 
-load(here::here("data", "all", "daily_data_2.rda"))
+# Factors Data ------------------------------------------------------------
 
-dly_data <- daily_data_2 %>%
+factor_data <- data_daily %>%
+  select(date, mkt_rf:umd) %>% 
+  mutate(mom = umd) %>%
+  select(-rf, -umd) %>% 
+  group_by(date) %>% 
+  summarize_all(function(x)(mean(x) / 100))
+
+factor_data %>% 
+  as.matrix() %>% 
+  save(file = here::here("data", "all", "daily_factor_mat.Rda"))
+
+factor_data %>% 
+  filter(year(date) >= start,
+         year(date) <= end) %>% 
+  as.matrix() %>% 
+  save(file = here::here("data", subDir, "daily_factor_mat.Rda"))
+
+# Firm Data ---------------------------------------------------------------
+
+dly_data <- data_daily %>%
   mutate(ghg = ifelse(!is.na(enerdp023) | !is.na(enerdp096), 
                (replace_na(enerdp023, 0) + replace_na(enerdp023, 0)) / revt_std, NA),
-           ret_rf = ret - rf,
+         ret_rf = (ret - rf) / 100,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
   mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore)
 
-save(dly_data, file = here::here("data", "all", "dly_data.Rda"))
+dly_data %>% 
+  save(file = here::here("data", "all", "dly_data.Rda"))
+
+dly_data %>% 
+  filter(year(date) >= start,
+         year(date) <= end) %>% 
+  save(file = here::here("data", subDir, "dly_data.Rda"))
 
 # SP Firm Data ------------------------------------------------------------
 
-dly_data_sp <- daily_data_2 %>%
+dly_data_sp <- data_daily %>%
   filter(!is.na(spmim)) %>%
   mutate(ghg = ifelse(!is.na(enerdp023) | !is.na(enerdp096), 
                       (replace_na(enerdp023, 0) + replace_na(enerdp023, 0)) / revt_std, NA),
-         ret_rf = ret - rf,
+         ret_rf = (ret - rf) / 100,
          permno = as.numeric(permno)) %>%
   mutate_at(vars(ghg), ~replace(., is.infinite(.), NA)) %>%
   mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore, spmim)
 
-save(dly_data_sp, file = here::here("data", "all", "dly_data_sp.Rda"))
+dly_data_sp %>% 
+  save(file = here::here("data", "all", "dly_data_sp.Rda"))
+
+dly_data_sp %>% 
+  filter(year(date) >= start,
+         year(date) <= end) %>% 
+  save(file = here::here("data", subDir, "dly_data_sp.Rda"))
 
 # Counting observations ---------------------------------------------------
 
-tbl <- matrix(data = NA, nrow = 6, ncol = 3)
+tbl <- matrix(data = NA, nrow = 6, ncol = 5)
+colnames(tbl) <- c("", "All data", "All ghg data", "Sample data", "Sample ghg data")
+tbl[, 1] <- c("Total obs", "Obs scope 1&2", "Obs scope3", 
+              "Total firms", "Firms scope 1&2", "Firms scope 3") 
 
-daily_data_2 %>% 
-  count() %>%
-  as.matrix() -> tbl[1,1]
+df <- data_daily
+df_sp <- data_daily %>% filter(year(date) >= start, year(date) <= end)
 
-daily_data_2 %>% 
-  filter(!is.na(spmim)) %>%
-  count() %>%
-  as.matrix() -> tbl[1,2]
+cnt_mat <- function(data) {
+  data %>% count() %>% as.matrix()
+}
 
-daily_data_2 %>% 
-  select(permno) %>% 
-  distinct() %>% 
-  count() %>%
-  as.matrix() -> tbl[2,1]
+dstnct_cnt_mat <- function(data) {
+  data %>% distinct() %>% count() %>% as.matrix()
+}
 
-daily_data_2 %>% 
-  filter(!is.na(spmim)) %>%
-  select(permno) %>%
-  distinct() %>%
-  count() %>%
-  as.matrix() -> tbl[2,2]
+tbl[1,2] <- df %>% cnt_mat()
+tbl[2,2] <- df %>% filter(!is.na(enerdp023)) %>% cnt_mat()
+tbl[3,2] <- df %>% filter(!is.na(enerdp096)) %>% cnt_mat()
+tbl[4,2] <- df %>% select(permno) %>% dstnct_cnt_mat()
+tbl[5,2] <- df %>% filter(!is.na(enerdp023)) %>% select(permno) %>% dstnct_cnt_mat()
+tbl[6,2] <- df %>% filter(!is.na(enerdp096)) %>% select(permno) %>% dstnct_cnt_mat()
 
-daily_data_2 %>% 
-  filter(!is.na(enerdp023)) %>%
-  count() %>%
-  as.matrix() -> tbl[3,1]
+tbl[1,3] <- df %>% filter(!is.na(spmim)) %>% cnt_mat()
+tbl[2,3] <- df %>% filter(!is.na(spmim), !is.na(enerdp023)) %>% cnt_mat()
+tbl[3,3] <- df %>% filter(!is.na(spmim), !is.na(enerdp096)) %>% cnt_mat()
+tbl[4,3] <- df %>% filter(!is.na(spmim)) %>% select(permno) %>% dstnct_cnt_mat()
+tbl[5,3] <- df %>% filter(!is.na(spmim), !is.na(enerdp023)) %>% select(permno) %>% dstnct_cnt_mat()
+tbl[6,3] <- df %>% filter(!is.na(spmim), !is.na(enerdp096)) %>% select(permno) %>% dstnct_cnt_mat()
 
-daily_data_2 %>% 
-  filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp023)) %>%
-  count() %>%
-  as.matrix() -> tbl[3,2]
+tbl[1,4] <- df_sp %>% cnt_mat()
+tbl[2,4] <- df_sp %>% filter(!is.na(enerdp023)) %>% cnt_mat()
+tbl[3,4] <- df_sp %>% filter(!is.na(enerdp096)) %>% cnt_mat()
+tbl[4,4] <- df_sp %>% select(permno) %>% dstnct_cnt_mat()
+tbl[5,4] <- df_sp %>% filter(!is.na(enerdp023)) %>% select(permno) %>% dstnct_cnt_mat()
+tbl[6,4] <- df_sp %>% filter(!is.na(enerdp096)) %>% select(permno) %>% dstnct_cnt_mat()
 
-daily_data_2 %>% 
-  filter(!is.na(enerdp096)) %>%
-  count() %>%
-  as.matrix() -> tbl[4,1]
+tbl[1,5] <- df_sp %>% filter(!is.na(spmim)) %>% cnt_mat()
+tbl[2,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp023)) %>% cnt_mat()
+tbl[3,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp096)) %>% cnt_mat()
+tbl[4,5] <- df_sp %>% filter(!is.na(spmim)) %>% select(permno) %>% dstnct_cnt_mat()
+tbl[5,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp023)) %>% select(permno) %>% dstnct_cnt_mat()
+tbl[6,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp096)) %>% select(permno) %>% dstnct_cnt_mat()
 
-daily_data_2 %>% 
-  filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp096)) %>%
-  count() %>%
-  as.matrix() -> tbl[4,2]
-
-daily_data_2 %>% 
-  filter(!is.na(enerdp023) | !is.na(enerdp096)) %>%
-  count() %>%
-  as.matrix() -> tbl[5,1]
-
-daily_data_2 %>% 
-  filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp023) | !is.na(enerdp096)) %>%
-  count() %>%
-  as.matrix() -> tbl[5,2]
-
-daily_data_2 %>% 
-  filter(!is.na(enerdp023) & !is.na(enerdp096)) %>%
-  count() %>%
-  as.matrix() -> tbl[6,1]
-
-daily_data_2 %>% 
-  filter(!is.na(spmim)) %>%
-  filter(!is.na(enerdp023) & !is.na(enerdp096)) %>%
-  count() %>%
-  as.matrix() -> tbl[6,2]
-
-tbl[, 3] <- tbl[, 2] / tbl[, 1]
-
-clipr::write_clip(tbl)
+write.csv(tbl, file = here::here("code", "clean_data", "dly_summ_tbl.csv"))

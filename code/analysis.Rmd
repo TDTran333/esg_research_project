@@ -1,21 +1,34 @@
 ---
-title: "ESG analysis"
+title: "Research Project: What is the peer performance of Green and Brown firms in the SP1500 index universe?"
 author: "TTD"
-date: "24/11/2020"
-output: html_document
+date: "14/12/2020"
+output: 
+  html_document:
+    toc: true
+params:
+  core: 1
+  hac: FALSE
+  subDir: "2009-2017"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-```{css}
+<style>
+h1.title {
+  font-size: 20px;
+}
 blockquote {
     font-size: 14px;
 }
-```
+</style>
 
-### Load Libraries
+# Introduction
+
+[Insert the goal of the research paper, Methodology, Key results]
+
+### Load Libraries and data
 ```{r, echo=TRUE, message=FALSE, warning=FALSE}
 library(here)             # Relative paths
 library(tidyverse)        # Data manipulation
@@ -24,78 +37,39 @@ library(lubridate)        # Manage dates
 library(broom)            # Tidy stat functions output
 library(summarytools)     # Summary stats
 library(PeerPerformance)  # Alpha screening
+
+sp <- readRDS(here("data", params$subDir, "mthly_data_sp.rds"))
+factor <- readRDS(here("data", params$subDir, "mthly_factor_mat.rds"))
 ```
 
-```{r, include=FALSE}
-source(here("function", "ggplot_theme_Publication-2.R"))
-theme_set(theme_Publication())
-```
-
-### Load Data
-```{r, echo=TRUE}
-load(here("data", "monthly_data.rda"))
-
-firms <- as_tibble(janitor::clean_names(data_monthly))
-
-sp500 <- firms %>% 
-  filter(spmim == 10) %>% 
-  rename(mom = umd)
-```
 ### Data Info
-
-| variable  | type | details                                      |  
-|-----------|------|----------------------------------------------|  
-| permno    | chr  | firm id                                      |  
-| date      | date | date                                         |  
-| ret       | dbl  | return pct                                   |  
-| prc       | dbl  | price (negative price = NA)                  |  
-| cap       | dbl  | mkt cap                                      |  
-| revt_std  | dbl  | standardized revenues                        |  
-| spmim     | dbl  | sp id: sp500 (10) / sp400 (91) / sp600 (92)  |  
-| enerdp023 | dbl  | scope 1 and scope CO2 emission               |  
-| enerdp096 | dbl  | scope 3 CO2 emission                         |  
-| envscore  | dbl  | env score by refinitiv                       |  
-| mkt_rf    | dbl  | mkt premium                                  |  
-| rf        | dbl  | risk-free                                    |  
-| hml       | dbl  | high minus low (value factor)                |  
-| smb       | dbl  | small minus big (small cap factor)           |  
-| cma       | dbl  | cons mins aggr (investment factor)           |  
-| rmw       | dbl  | robus minus weak (profitability factor)      |  
-| mom       | dbl  | up minus down (momentum factor)              |  
-
-#### From Ardia_et_al(2020) research paper on Climate change concerns:  
->To quantify a firm's greenness, we rely on the ASSET4/Refinitiv CO2
-(carbon dioxide) equivalent greenhouse gas (GHG) emissions data scaled by
-the firms' revenue.
->Firms whose variable is below (above) the 25th (75th) percentile on
-a given day are defined as green (brown) firms.
->GHG emissions are typically reported with a one-year delay.
-
-#### Data Sources
-CO2 emissions comes from **ASSET4**.  
-Revenues comes from **Compustat**.  
-Environment scores comes from **Refinitiv**.  
-5 Mkt Factor model comes from **Fama-French**.  
-Firm returns and price comes from **Datastream**.
-
-To do potentially:  
-- Add industry data.  
-- Add score ratings.  
-
-### Data Summary
-```{r, warning=FALSE}
-sp500 <- sp500 %>%
-  mutate(ghg_scope_1_2 = enerdp023 / revt_std, 
-         ghg_scope_3 = enerdp096 / revt_std, 
-         ghg_total = (replace_na(enerdp023, 0) + replace_na(enerdp096,0)) / revt_std,
-         ghg_total = na_if(ghg_total, 0),
-         year = year(date),
-         ret_rf = ret - rf,
-         permno = as.numeric(permno))
-
-skimr::skim(sp500)
-descr(sp500)
-```
++----------+------+---------------------------------------------+
+| variable | type | details                                     |
++==========+======+=============================================+
+| permno   | chr  | firm id                                     |
++----------+------+---------------------------------------------+
+| date     | date | date                                        |
++----------+------+---------------------------------------------+
+| ret_rf   | dbl  | excess return                               |
++----------+------+---------------------------------------------+
+| ghg      | dbl  | ghg emission intensity (scope 1&2&3 / rev)  |
++----------+------+---------------------------------------------+
+| envscore | dbl  | env score by refinitiv                      |
++----------+------+---------------------------------------------+
+| spmim    | dbl  | sp id: sp500 (10) / sp400 (91) / sp600 (92) |
++----------+------+---------------------------------------------+
+| mkt_rf   | dbl  | mkt premium                                 |
++----------+------+---------------------------------------------+
+| hml      | dbl  | high minus low (value factor)               |
++----------+------+---------------------------------------------+
+| smb      | dbl  | small minus big (small cap factor)          |
++----------+------+---------------------------------------------+
+| cma      | dbl  | cons mins aggr (investment factor)          |
++----------+------+---------------------------------------------+
+| rmw      | dbl  | robust minus weak (profitability factor)    |
++----------+------+---------------------------------------------+
+| mom      | dbl  | up minus down (momentum factor)             |
++----------+------+---------------------------------------------+
 
 ### Data Visualization
 ```{r message=FALSE, results=FALSE}
@@ -110,184 +84,96 @@ f_summarize_data <- function(df, x) {
               q75 = quantile({{ x }}, 0.75))
 }
 
-sp500 %>%
-  f_summarize_data(enerdp023) %>%
-  ggplot(aes(date, median)) +
-  geom_line() +
+sp %>%
+  f_summarize_data(ghg) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = avg), color = "red", size = 1.2) +
+  geom_line(aes(y = median), color = "blue", lty = 2, size = 1.2) +
   geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
   labs(x = "Date",
        y = "Tonnes of CO2-equivalent GHG",
-       title = "Greenhouse Gas Emissions over time: Scope 1 + 2",
+       title = "Greenhouse Gas Emissions Intensity over time.",
        subtitle = "Ribbon : 25th-75th percentile")
 
-sp500 %>%
-  f_summarize_data(ghg_scope_1_2) %>%
-  ggplot(aes(date, median)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
-  labs(x = "Date",
-       y = "Tonnes of CO2-equivalent GHG",
-       title = "Greenhouse Gas Emissions Intensity over time: Scope 1 + 2",
-       subtitle = "Ribbon : 25th-75th percentile")
+sp %>% 
+  ggplot(aes(ghg)) +
+  geom_histogram()
 
-sp500 %>%
-  f_summarize_data(enerdp096) %>%
-  ggplot(aes(date, median)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
-  labs(x = "Date",
-       y = "Tonnes of CO2-equivalent GHG",
-       title = "Greenhouse Gas Emissions over time: Scope 3",
-       subtitle = "Ribbon : 25th-75th percentile")
-
-sp500 %>%
-  f_summarize_data(ghg_scope_3) %>%
-  ggplot(aes(date, median)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
-  labs(x = "Date",
-       y = "Tonnes of CO2-equivalent GHG",
-       title = "Greenhouse Gas Emissions Intensity over time : Scope 3",
-       subtitle = "Ribbon : 25th-75th percentile")
-
-sp500 %>%
-  f_summarize_data(ghg_total) %>%
-  ggplot(aes(date, median)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
-  labs(x = "Date",
-       y = "Tonnes of CO2-equivalent GHG",
-       title = "Greenhouse Gas Emissions Intensity over time : Total",
-       subtitle = "Ribbon : 25th-75th percentile")
-
-sp500 %>%
+sp %>%
   f_summarize_data(envscore) %>%
-  ggplot(aes(date, median)) +
-  geom_line() +
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = avg), color = "red", size = 1.2) +
+  geom_line(aes(y = median), color = "blue", lty = 2, size = 1.2) +
   geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
   labs(x = "Date",
        y = "Environment score",
-       title = "Environment score over time",
+       title = "Environment score over time.",
        subtitle = "Ribbon : 25th-75th percentile")
+
+sp %>% 
+  ggplot(aes(envscore)) +
+  geom_histogram()
 ```
-
-
-#### Goals - Week 4
-Reproduce paper descriptive data on p.29, "Table 3"  
-- Percentage of firms with emission data  
-- Summary statistics  
 
 ### Data Analysis
 
 ##### Count number of firms per year
 ```{r, message=FALSE}
-firms_ghg <- sp500 %>%
-  group_by(year) %>%
-  mutate(n_obs = n(),
-         n_firms = n_distinct(permno)) %>% 
-  ungroup() %>% 
-  filter(!is.na(enerdp023) | !is.na(enerdp096)) %>%
-  group_by(year) %>% 
-  mutate(n_obs_ghg = n(),
-         n_firms_ghg_data = n_distinct(permno),
-         pct_firms_ghg_data = (n_firms_ghg_data / n_firms) * 100)
+t1 <- sp %>%
+  group_by(year = year(date)) %>%
+  summarize(n_obs = n(),
+            n_firms = n_distinct(permno))
+t2 <- sp %>%
+  filter(!is.na(ghg)) %>% 
+  group_by(year = year(date)) %>%
+  summarize(n_obs = n(),
+            n_firms = n_distinct(permno))
 
-firms_ghg_table <- firms_ghg %>% 
-  select(year, n_obs, n_obs_ghg, n_firms, n_firms_ghg_data, pct_firms_ghg_data) %>%
-  filter(year >= 2009 & year != 2018) %>% 
-  group_by(year) %>% 
-  summarize(n_obs         = mean(n_obs),
-            n_obs_ghg     = mean(n_obs_ghg),
-            n_firms       = mean(n_firms),
-            n_firms_ghg   = mean(n_firms_ghg_data),
-            pct_firms_ghg = mean(pct_firms_ghg_data))
-
-firms_ghg_table %>% 
+t1 %>% 
+  inner_join(t2, by = "year", suffix = c("_total", "_ghg")) %>% 
+  janitor::adorn_totals() %>% 
+  mutate(pct_ghg = (n_firms_ghg / n_firms_total) * 100) %>%
   knitr::kable(caption = "Percent of firms with ghg data.",
                align = "c",
                digits = 2,
                booktabs = TRUE)
 
-firms_ghg_table %>% select(n_firms_ghg) %>% sum()
+t2 %>% select(n_firms_ghg) %>% sum()
 ```
 
 ##### Summary Statistics
 ```{r}
-sp500 %>% 
-  filter(!is.na(ghg_total) & ghg_total > 0) %>% 
-  group_by(year) %>% 
-  count(n_distinct(permno))
 
-sp500_subset <- sp500 %>%
-  filter(!is.na(ghg_total),
-         year >= 2009 & year != 2018) %>% 
-  mutate(ghg_total = DescTools::Winsorize(ghg_total, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
-  arrange(ghg_total)
-
-sp500_subset %>% 
-  group_by(year) %>% 
-  summarize(n_distinct(permno))
-
-sp500_subset %>% 
-  select(year, permno, ghg_total) %>% 
-  group_by(year) %>% 
+sp %>% 
+  group_by(year(date)) %>% 
+  select(ghg, envscore) %>% 
   descr()
 
-sp500_subset %>% 
-  ggplot(aes(ghg_total)) +
+sp %>% 
+  select(ghg, envscore) %>% 
+  descr()
+
+sp %>%
+  filter(!is.na(ghg)) %>% 
+  ggplot(aes(ghg)) +
   geom_boxplot() +
-  facet_wrap(~year) +
+  facet_wrap(~year(date)) +
   coord_flip()
 
-sp500_subset %>%
-  group_by(year, permno) %>%
-  summarize(avg_firm_ghg_year = mean(ghg_total)) %>%
+sp %>%
+  group_by(year(date), permno) %>%
+  summarize(avg_yrly_ghg = mean(ghg),
+            avg_yrly_envscore = mean(envscore)) %>%
   ungroup() %>%
-  select(avg_firm_ghg_year) %>%
+  select(avg_yrly_ghg, avg_yrly_envscore) %>%
   descr() %>%
-  knitr::kable(caption = "GHG data",
+  knitr::kable(caption = "GHG Emission Intensity and Environment score  data",
                align = "c",
                digits = 2,
                booktabs = TRUE)
-
-sp500_subset %>% 
-  filter(!is.na(envscore)) %>% 
-  group_by(year, permno) %>%
-  summarize(avg_firm_envscore_year = mean(envscore)) %>%
-  ungroup() %>%
-  select(avg_firm_envscore_year) %>% 
-  descr() %>% 
-  knitr::kable(caption = "Environment score data",
-               align = "c",
-               digits = 2,
-               booktabs = TRUE)
-
 ```
 
-#### Goals - Week 5
-Run alphaScreening on ESG data
-
-#### Factor models:
-One-factor model: MKT_RF  
-Three-factor model: MKT, HML,SMB  
-Six-factor model: MKT, HML, SMB, RMW, CMA, MOM  
-
-```{r}
-factor_mat <- sp500_subset %>%
-  select(date, mkt_rf, hml, smb, rmw, cma, mom) %>%
-  group_by(date) %>%
-  summarize_all(unique) %>% 
-  select(-date) %>% 
-  summarize(./100) %>% 
-  as.matrix()
-
-one_factor <- factor_mat[,1]
-
-three_factor <- factor_mat[,1:3]
-
-six_factor <- factor_mat
-```
-
+### Alpha screening
 
 ### Setup firms return data for alphaScreening
 ```{r}
@@ -360,100 +246,69 @@ non_disclosed_mat <- sp500 %>%
   
 ```
 
-## To-do: simplify the code with array
+<!-- ## To-do: simplify the code with array -->
 
-```{r}
-f_make_graphs <- function(df, title) {
-  pi <- df[8:10] %>% 
-    bind_rows() %>% 
-    select(pipos, pizero, pineg) %>%
-    arrange(desc(pipos), pineg, pizero)
-  
-  cex = cex.axis = 0.8
-  par(mfrow = c(1, 2))
-  plot(12 * 100 * sort(df$alpha, decreasing = TRUE), 1:length(df$alpha), type = 'b', las = 1, pch = 20, cex = cex, cex.axis = cex.axis, 
-       xlab = "", ylab = "", main = "alpha", axes = FALSE)
-  box(); grid()
-  labs = seq(-30, 60, by = 10)
-  axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
-  axis(side = 2, at = 1:length(df$alpha), labels = 1:length(df$alpha), las = 1, cex.axis = cex.axis)
-  
-  mainstr = expression(hat(pi)^'+'*' / '*hat(pi)^0*' / '*hat(pi)^'-')
-  barplot(t(100 * pi), horiz = TRUE, names.arg = NULL, col = c(gray(0), gray(0.8), gray(0.5)),
-          space = 0, xlab = "", xlim = c(0, 100), cex.names = cex.axis, border = NA,
-          cex.axis = cex.axis, main = mainstr, las = 1, axes = FALSE)
-  labs = seq(0, 100, by = 25)
-  axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis)
-  box()
-  x = seq(from = 104, to = -4, length.out = 200)
-  y = seq(from = 0, to = 100, length.out = 200)
-  par(new = TRUE); plot(x, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
-  par(new = TRUE); plot(x-27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
-  par(new = TRUE); plot(x+27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "")
-  mtext(title, side = 3, line = -1.5, outer = TRUE, cex = 1.25)
-}
-```
+<!-- ```{r} -->
+<!-- f_make_graphs <- function(df, title) { -->
+<!--   pi <- df[8:10] %>%  -->
+<!--     bind_rows() %>%  -->
+<!--     select(pipos, pizero, pineg) %>% -->
+<!--     arrange(desc(pipos), pineg, pizero) -->
 
-### alphaScreening
+<!--   cex = cex.axis = 0.8 -->
+<!--   par(mfrow = c(1, 2)) -->
+<!--   plot(12 * 100 * sort(df$alpha, decreasing = TRUE), 1:length(df$alpha), type = 'b', las = 1, pch = 20, cex = cex, cex.axis = cex.axis,  -->
+<!--        xlab = "", ylab = "", main = "alpha", axes = FALSE) -->
+<!--   box(); grid() -->
+<!--   labs = seq(-30, 60, by = 10) -->
+<!--   axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis) -->
+<!--   axis(side = 2, at = 1:length(df$alpha), labels = 1:length(df$alpha), las = 1, cex.axis = cex.axis) -->
 
-#### Returns only
-```{r}
-ctr <- list(nCore = 3)
-results_all <- alphaScreening(ret_mat, control = ctr)
-results_green <- alphaScreening(g_ret_mat, control = ctr)
-results_brown <- alphaScreening(b_ret_mat, control = ctr)
-results_between <- alphaScreening(neutral_ret_mat, control = ctr)
-results_non_disclosed <- alphaScreening(non_disclosed_mat, control = ctr)
+<!--   mainstr = expression(hat(pi)^'+'*' / '*hat(pi)^0*' / '*hat(pi)^'-') -->
+<!--   barplot(t(100 * pi), horiz = TRUE, names.arg = NULL, col = c(gray(0), gray(0.8), gray(0.5)), -->
+<!--           space = 0, xlab = "", xlim = c(0, 100), cex.names = cex.axis, border = NA, -->
+<!--           cex.axis = cex.axis, main = mainstr, las = 1, axes = FALSE) -->
+<!--   labs = seq(0, 100, by = 25) -->
+<!--   axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis) -->
+<!--   box() -->
+<!--   x = seq(from = 104, to = -4, length.out = 200) -->
+<!--   y = seq(from = 0, to = 100, length.out = 200) -->
+<!--   par(new = TRUE); plot(x, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "") -->
+<!--   par(new = TRUE); plot(x-27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "") -->
+<!--   par(new = TRUE); plot(x+27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "") -->
+<!--   mtext(title, side = 3, line = -1.5, outer = TRUE, cex = 1.25) -->
+<!-- } -->
+<!-- ``` -->
 
-results_all %>% f_make_graphs("All firms - Returns only")
-results_green %>% f_make_graphs("Green firms - Returns only")
-results_brown %>% f_make_graphs("Brown firms - Returns only")
-results_between %>% f_make_graphs("In-between firms - Returns only")
-results_non_disclosed %>% f_make_graphs("Non-disclosing firms - Returns only")
+<!-- ### alphaScreening -->
 
-```
+<!-- #### Three-factor model -->
+<!-- ```{r} -->
+<!-- ctr <- list(nCore = 1) -->
+<!-- results_all_3f <- alphaScreening(ret_mat, factors = three_factor, control = ctr) -->
+<!-- results_green_3f <- alphaScreening(g_ret_mat, factors = three_factor, control = ctr) -->
+<!-- results_brown_3f <- alphaScreening(b_ret_mat, factors = three_factor, control = ctr) -->
+<!-- results_between_3f <- alphaScreening(neutral_ret_mat, factors = three_factor, control = ctr) -->
+<!-- results_non_disclosed_3f <- alphaScreening(non_disclosed_mat, factors = three_factor, control = ctr) -->
 
-#### One-factor model
-```{r}
-results_all_1f <- alphaScreening(ret_mat, factors = one_factor, control = ctr)
-results_green_1f <- alphaScreening(g_ret_mat, factors = one_factor, control = ctr)
-results_brown_1f <- alphaScreening(b_ret_mat, factors = one_factor, control = ctr)
-results_between_1f <- alphaScreening(neutral_ret_mat, factors = one_factor, control = ctr)
-results_non_disclosed_1f <- alphaScreening(non_disclosed_mat, factors = one_factor, control = ctr)
+<!-- results_all_3f %>% f_make_graphs("All firms - Three-factor model") -->
+<!-- results_green_3f %>% f_make_graphs("Green firms - Three-factor model") -->
+<!-- results_brown_3f %>% f_make_graphs("Brown firms - Three-factor model") -->
+<!-- results_between_3f %>% f_make_graphs("In-between firms - Three-factor model") -->
+<!-- results_non_disclosed_3f %>% f_make_graphs("Non-disclosing firms - Three-factor model") -->
+<!-- ``` -->
 
-results_all_1f %>% f_make_graphs("All firms - One-factor model")
-results_green_1f %>% f_make_graphs("Green firms - O-factor model")
-results_brown_1f %>% f_make_graphs("Brown firms - One-factor model")
-results_between_1f %>% f_make_graphs("In-between firms - One-factor model")
-results_non_disclosed_1f %>% f_make_graphs("Non-disclosing firms - One-factor model")
-```
+<!-- #### Six-factor model -->
+<!-- ```{r} -->
+<!-- results_all_6f <- alphaScreening(ret_mat, factors = six_factor, control = ctr) -->
+<!-- results_green_6f <- alphaScreening(g_ret_mat, factors = six_factor, control = ctr) -->
+<!-- results_brown_6f <- alphaScreening(b_ret_mat, factors = six_factor, control = ctr) -->
+<!-- results_between_6f <- alphaScreening(neutral_ret_mat, factors = six_factor, control = ctr) -->
+<!-- results_non_disclosed_6f <- alphaScreening(non_disclosed_mat, factors = six_factor, control = ctr) -->
 
-#### Three-factor model
-```{r}
-results_all_3f <- alphaScreening(ret_mat, factors = three_factor, control = ctr)
-results_green_3f <- alphaScreening(g_ret_mat, factors = three_factor, control = ctr)
-results_brown_3f <- alphaScreening(b_ret_mat, factors = three_factor, control = ctr)
-results_between_3f <- alphaScreening(neutral_ret_mat, factors = three_factor, control = ctr)
-results_non_disclosed_3f <- alphaScreening(non_disclosed_mat, factors = three_factor, control = ctr)
-
-results_all_3f %>% f_make_graphs("All firms - Three-factor model")
-results_green_3f %>% f_make_graphs("Green firms - Three-factor model")
-results_brown_3f %>% f_make_graphs("Brown firms - Three-factor model")
-results_between_3f %>% f_make_graphs("In-between firms - Three-factor model")
-results_non_disclosed_3f %>% f_make_graphs("Non-disclosing firms - Three-factor model")
-```
-
-#### Six-factor model
-```{r}
-results_all_6f <- alphaScreening(ret_mat, factors = six_factor, control = ctr)
-results_green_6f <- alphaScreening(g_ret_mat, factors = six_factor, control = ctr)
-results_brown_6f <- alphaScreening(b_ret_mat, factors = six_factor, control = ctr)
-results_between_6f <- alphaScreening(neutral_ret_mat, factors = six_factor, control = ctr)
-results_non_disclosed_6f <- alphaScreening(non_disclosed_mat, factors = six_factor, control = ctr)
-
-results_all_6f %>% f_make_graphs("All firms - Six-factor model")
-results_green_6f %>% f_make_graphs("Green firms - Six-factor model")
-results_brown_6f %>% f_make_graphs("Brown firms - Six-factor model")
-results_between_6f %>% f_make_graphs("In-between firms - Six-factor model")
-results_non_disclosed_6f %>% f_make_graphs("Non-disclosing firms - Six-factor model")
-```
+<!-- results_all_6f %>% f_make_graphs("All firms - Six-factor model") -->
+<!-- results_green_6f %>% f_make_graphs("Green firms - Six-factor model") -->
+<!-- results_brown_6f %>% f_make_graphs("Brown firms - Six-factor model") -->
+<!-- results_between_6f %>% f_make_graphs("In-between firms - Six-factor model") -->
+<!-- results_non_disclosed_6f %>% f_make_graphs("Non-disclosing firms - Six-factor model") -->
+<!-- ``` -->
