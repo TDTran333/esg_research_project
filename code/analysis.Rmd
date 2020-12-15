@@ -6,8 +6,7 @@ output:
   html_document:
     toc: true
 params:
-  core: 1
-  hac: FALSE
+  ctr: list(nCore = 1)
   subDir: "2009-2017"
 ---
 
@@ -26,10 +25,12 @@ blockquote {
 
 # Introduction
 
-[Insert the goal of the research paper, Methodology, Key results]
+[Insert the goal of the research paper]
+[Insert comment about the data]
+[Insert comment about the methodology]
+[Insert summaries of results]
 
-### Load Libraries and data
-```{r, echo=TRUE, message=FALSE, warning=FALSE}
+```{r Load Libraries and Data, echo=TRUE, message=FALSE, warning=FALSE}
 library(here)             # Relative paths
 library(tidyverse)        # Data manipulation
 library(tidylog)          # Info about dataframe
@@ -43,6 +44,10 @@ factor <- readRDS(here("data", params$subDir, "mthly_factor_mat.rds"))
 ```
 
 ### Data Info
+
+[Insert comments on how the data was cleaned.]
+
+##### Variables description
 +----------+------+---------------------------------------------+
 | variable | type | details                                     |
 +==========+======+=============================================+
@@ -72,7 +77,10 @@ factor <- readRDS(here("data", params$subDir, "mthly_factor_mat.rds"))
 +----------+------+---------------------------------------------+
 
 ### Data Visualization
-```{r message=FALSE, results=FALSE}
+
+[Comment on the graphs and histograms.]
+
+```{r Data Visualization, message=FALSE, results=FALSE}
 
 f_summarize_data <- function(df, x) {
   {{ df }} %>%
@@ -93,11 +101,18 @@ sp %>%
   labs(x = "Date",
        y = "Tonnes of CO2-equivalent GHG",
        title = "Greenhouse Gas Emissions Intensity over time.",
-       subtitle = "Ribbon : 25th-75th percentile")
+       subtitle = paste("Ribbon: 25th-75th percentile. Period: ", params$subDir))
 
-sp %>% 
-  ggplot(aes(ghg)) +
-  geom_histogram()
+sp %>%
+  group_by(permno) %>% 
+  summarize(avg_ghg = mean(ghg, na.rm = TRUE)) %>%
+  filter(!is.nan(avg_ghg)) %>% 
+  ggplot(aes(avg_ghg)) +
+  geom_histogram() +
+  labs(x = "GHG",
+       y = "Number of firms",
+       title = "Histogram of firms average ghg.",
+       subtitle = paste("Period: ", params$subDir))
 
 sp %>%
   f_summarize_data(envscore) %>%
@@ -108,17 +123,29 @@ sp %>%
   labs(x = "Date",
        y = "Environment score",
        title = "Environment score over time.",
-       subtitle = "Ribbon : 25th-75th percentile")
+       subtitle = paste("Ribbon: 25th-75th percentile. Period: ", params$subDir))
 
-sp %>% 
-  ggplot(aes(envscore)) +
-  geom_histogram()
+sp %>%
+  group_by(permno) %>% 
+  summarize(avg_envscore = mean(envscore, na.rm = TRUE)) %>%
+  filter(!is.nan(avg_envscore)) %>% 
+  ggplot(aes(avg_envscore)) +
+  geom_histogram() +
+  labs(x = "Environment score",
+       y = "Number of firms",
+       title = "Histogram of firms average environment score.",
+       subtitle = paste("Period: ", params$subDir))
+
 ```
 
 ### Data Analysis
 
-##### Count number of firms per year
-```{r, message=FALSE}
+##### Number of firms per year
+
+[Insert comment on number of firms]
+
+
+```{r Number of Firms per Year, message=FALSE}
 t1 <- sp %>%
   group_by(year = year(date)) %>%
   summarize(n_obs = n(),
@@ -137,12 +164,13 @@ t1 %>%
                align = "c",
                digits = 2,
                booktabs = TRUE)
-
-t2 %>% select(n_firms_ghg) %>% sum()
 ```
 
-##### Summary Statistics
-```{r}
+##### Descriptive Statistics
+
+[Insert comment on the descriptive statistics]
+
+```{r Descriptive Statistics}
 
 sp %>% 
   group_by(year(date)) %>% 
@@ -173,142 +201,141 @@ sp %>%
                booktabs = TRUE)
 ```
 
-### Alpha screening
+### Groups
 
-### Setup firms return data for alphaScreening
-```{r}
-sp500_subset %>% 
-  select_if(~ !any(is.na(.))) %>% 
+[Insert explanation on how we divided the groups]
+
+```{r Generate Groups}
+ghg_df <- sp %>%
+  select(date, permno, ghg) %>% 
+  group_by(year = year(date), permno) %>%
+  summarize(avg_ghg_yr = mean(ghg, na.rm = TRUE)) %>%
   group_by(permno) %>%
-  select(ret) %>% 
+  mutate(avg_ghg_5yr = zoo::rollapplyr(avg_ghg_yr, 
+                             width = 5,
+                             FUN = function(x) mean(x, na.rm = TRUE), 
+                             fill = NA, 
+                             partial = TRUE,
+                             align = "right")) %>%
+  mutate_at(vars(avg_ghg_yr, avg_ghg_5yr), ~replace(., is.nan(.), NA)) %>% 
+  group_by(year) %>% 
+  mutate(q_25 = quantile(avg_ghg_5yr, probs = 0.25, na.rm = TRUE),
+         q_75 = quantile(avg_ghg_5yr, probs = 0.75, na.rm = TRUE)) %>%
+  mutate(status = case_when(is.na(avg_ghg_5yr)  ~ "U",
+                            avg_ghg_5yr <= q_25 ~ "G",
+                            avg_ghg_5yr >= q_75 ~ "B",                           
+                            avg_ghg_5yr < q_75 & avg_ghg_5yr > q_25 ~ "N")) %>%
+  arrange(permno)
+
+color = c("#cb997e", "#06d6a0", "#bfc0c0", "#ffffff")
+
+ghg_df %>% 
+  group_by(year, status) %>% 
   count() %>% 
-  ggplot(aes(n)) +
-  geom_bar() +
-  labs(title = "Number of available monthly returns during 2009-2018")
-
-ret_mat <- sp500_subset %>%
-  select(date, permno, ret_rf) %>%
-  mutate(ret_rf = ret_rf / 100) %>% 
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select_if(~ !any(is.na(.))) %>% 
-  select(-date) %>% 
-  unnest(cols = c()) %>% 
-  as.matrix()
-
-green <- sp500_subset %>% 
-  filter(ghg_total < quantile(ghg_total, 0.25)) %>% 
-  summarize(permno = unique(permno))
-
-g_ret_mat <- sp500_subset %>%
-  filter(permno %in% green[[1]]) %>% 
-  select(date, permno, ret_rf) %>%
-  mutate(ret_rf = ret_rf / 100) %>% 
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select_if(~ !any(is.na(.))) %>% 
-  select(-date) %>% 
-  unnest(cols = c()) %>% 
-  as.matrix()
-
-brown <- sp500_subset %>% 
-  filter(ghg_total > quantile(ghg_total, 0.75)) %>% 
-  summarize(permno = unique(permno))
-
-b_ret_mat <- sp500_subset %>%
-  filter(permno %in% brown[[1]]) %>% 
-  select(date, permno, ret_rf) %>%
-  mutate(ret_rf = ret_rf / 100) %>% 
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select_if(~ !any(is.na(.))) %>% 
-  select(-date) %>% 
-  unnest(cols = c()) %>% 
-  as.matrix()
-
-neutral_ret_mat <- sp500_subset %>%
-  filter(!(permno %in% green[[1]]) & !(permno %in% brown[[1]])) %>% 
-  select(date, permno, ret_rf) %>%
-  mutate(ret_rf = ret_rf / 100) %>% 
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select_if(~ !any(is.na(.))) %>% 
-  select(-date) %>% 
-  unnest(cols = c()) %>% 
-  as.matrix()
-  
-non_disclosed_mat <- sp500 %>%
-  filter(is.na(ghg_total),
-         year >= 2009 & year != 2018) %>%
-  select(date, permno, ret_rf) %>%
-  mutate(ret_rf = ret_rf / 100) %>% 
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select_if(~ !any(is.na(.))) %>% 
-  select(-date) %>% 
-  unnest(cols = c()) %>% 
-  as.matrix()
-  
+    ggplot(aes(year, n, fill = status)) +
+  geom_col(width = 0.8, colour = "black") +
+  geom_text(aes(label = n),  position = position_stack(vjust = .5)) +
+  scale_fill_manual(values = color) +
+  scale_x_continuous(breaks = 2009:2017) +
+  labs(x = "Year",
+       y = "Firms count",
+       title = "Number of firms by group: Brown, Green, Neutral and Undisclosed.")
 ```
 
-<!-- ## To-do: simplify the code with array -->
+```{r Group Id}
+green_id <- ghg_df %>% 
+  filter(status == "G") %>%
+  select(year, permno) %>%
+  group_by(year, permno) %>%
+  pivot_wider(names_from = year, values_from = permno)
 
-<!-- ```{r} -->
-<!-- f_make_graphs <- function(df, title) { -->
-<!--   pi <- df[8:10] %>%  -->
-<!--     bind_rows() %>%  -->
-<!--     select(pipos, pizero, pineg) %>% -->
-<!--     arrange(desc(pipos), pineg, pizero) -->
+brown_id <- ghg_df %>% 
+  filter(status == "B") %>%
+  select(year, permno) %>%
+  group_by(year, permno) %>%
+  pivot_wider(names_from = year, values_from = permno)
+```
+### Transition Matrix
 
-<!--   cex = cex.axis = 0.8 -->
-<!--   par(mfrow = c(1, 2)) -->
-<!--   plot(12 * 100 * sort(df$alpha, decreasing = TRUE), 1:length(df$alpha), type = 'b', las = 1, pch = 20, cex = cex, cex.axis = cex.axis,  -->
-<!--        xlab = "", ylab = "", main = "alpha", axes = FALSE) -->
-<!--   box(); grid() -->
-<!--   labs = seq(-30, 60, by = 10) -->
-<!--   axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis) -->
-<!--   axis(side = 2, at = 1:length(df$alpha), labels = 1:length(df$alpha), las = 1, cex.axis = cex.axis) -->
+[Insert comment about transition matrix]
 
-<!--   mainstr = expression(hat(pi)^'+'*' / '*hat(pi)^0*' / '*hat(pi)^'-') -->
-<!--   barplot(t(100 * pi), horiz = TRUE, names.arg = NULL, col = c(gray(0), gray(0.8), gray(0.5)), -->
-<!--           space = 0, xlab = "", xlim = c(0, 100), cex.names = cex.axis, border = NA, -->
-<!--           cex.axis = cex.axis, main = mainstr, las = 1, axes = FALSE) -->
-<!--   labs = seq(0, 100, by = 25) -->
-<!--   axis(side = 1, at = labs, labels = paste0(labs, "%"), cex.axis = cex.axis) -->
-<!--   box() -->
-<!--   x = seq(from = 104, to = -4, length.out = 200) -->
-<!--   y = seq(from = 0, to = 100, length.out = 200) -->
-<!--   par(new = TRUE); plot(x, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "") -->
-<!--   par(new = TRUE); plot(x-27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "") -->
-<!--   par(new = TRUE); plot(x+27.5, y, type = 'l', lty = "dashed", lwd = 1, xlim = c(0, 100), ylim = c(0, 100), axes = FALSE, ylab = "", xlab = "") -->
-<!--   mtext(title, side = 3, line = -1.5, outer = TRUE, cex = 1.25) -->
-<!-- } -->
-<!-- ``` -->
+```{r Transition Matrix}
+x <- c(1,2,1,1,3,4,4,1,2,4,1,4,3,4,4,4,3,1,3,2,3,3,3,4,2,2,3)
+p <- matrix(nrow = 4, ncol = 4, 0)
+for (t in 1:(length(x) - 1)) p[x[t], x[t + 1]] <- p[x[t], x[t + 1]] + 1
+for (i in 1:4) p[i, ] <- p[i, ] / sum(p[i, ])
+```
 
-<!-- ### alphaScreening -->
+### Alpha screening
 
-<!-- #### Three-factor model -->
-<!-- ```{r} -->
-<!-- ctr <- list(nCore = 1) -->
-<!-- results_all_3f <- alphaScreening(ret_mat, factors = three_factor, control = ctr) -->
-<!-- results_green_3f <- alphaScreening(g_ret_mat, factors = three_factor, control = ctr) -->
-<!-- results_brown_3f <- alphaScreening(b_ret_mat, factors = three_factor, control = ctr) -->
-<!-- results_between_3f <- alphaScreening(neutral_ret_mat, factors = three_factor, control = ctr) -->
-<!-- results_non_disclosed_3f <- alphaScreening(non_disclosed_mat, factors = three_factor, control = ctr) -->
+[Insert comment about the methodology]
 
-<!-- results_all_3f %>% f_make_graphs("All firms - Three-factor model") -->
-<!-- results_green_3f %>% f_make_graphs("Green firms - Three-factor model") -->
-<!-- results_brown_3f %>% f_make_graphs("Brown firms - Three-factor model") -->
-<!-- results_between_3f %>% f_make_graphs("In-between firms - Three-factor model") -->
-<!-- results_non_disclosed_3f %>% f_make_graphs("Non-disclosing firms - Three-factor model") -->
-<!-- ``` -->
+```{r Alpha Screening: Green Firms - Backward looking}
+ret_g <- mthly_data_sp %>%
+  filter(permno %in% green_id$`2013`[[1]]) %>%
+  filter(year(date) <= 2013) %>% 
+  select(date, permno, ret_rf) %>%
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select(-date) %>% 
+  as.matrix()
 
-<!-- #### Six-factor model -->
-<!-- ```{r} -->
-<!-- results_all_6f <- alphaScreening(ret_mat, factors = six_factor, control = ctr) -->
-<!-- results_green_6f <- alphaScreening(g_ret_mat, factors = six_factor, control = ctr) -->
-<!-- results_brown_6f <- alphaScreening(b_ret_mat, factors = six_factor, control = ctr) -->
-<!-- results_between_6f <- alphaScreening(neutral_ret_mat, factors = six_factor, control = ctr) -->
-<!-- results_non_disclosed_6f <- alphaScreening(non_disclosed_mat, factors = six_factor, control = ctr) -->
+factor_mat <- mthly_factor %>% 
+  filter(year(date) <= 2013) %>% 
+  select(-date) %>%
+  as.matrix()
 
-<!-- results_all_6f %>% f_make_graphs("All firms - Six-factor model") -->
-<!-- results_green_6f %>% f_make_graphs("Green firms - Six-factor model") -->
-<!-- results_brown_6f %>% f_make_graphs("Brown firms - Six-factor model") -->
-<!-- results_between_6f %>% f_make_graphs("In-between firms - Six-factor model") -->
-<!-- results_non_disclosed_6f %>% f_make_graphs("Non-disclosing firms - Six-factor model") -->
-<!-- ``` -->
+result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
+result_g %>% f_screenplot("Green firms - 6f models - year 2013")
+
+ret_g <- mthly_data_sp %>%
+  filter(permno %in% green_id$`2017`[[1]]) %>%
+  filter(year(date) <= 2017, year(date) > 2012) %>% 
+  select(date, permno, ret_rf) %>%
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select(-date) %>% 
+  as.matrix()
+
+factor_mat <- mthly_factor %>% 
+  filter(year(date) <= 2017, year(date) > 2012) %>% 
+  select(-date) %>%
+  as.matrix()
+
+result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
+result_g %>% f_screenplot("Green firms - 6f models - year 2017")
+```
+
+```{r Alpha Screening: Green Firms - Forward looking}
+
+ret_g <- mthly_data_sp %>%
+  filter(permno %in% green_id$`2009`[[1]]) %>%
+  filter(year(date) <= 2014, year(date) >= 2010) %>% 
+  select(date, permno, ret_rf) %>%
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select(-date) %>% 
+  as.matrix()
+
+factor_mat <- mthly_factor %>% 
+  filter(year(date) <= 2013) %>% 
+  select(-date) %>%
+  as.matrix()
+
+result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
+result_g %>% f_screenplot("Green firms - 6f models - year 2009")
+
+ret_g <- mthly_data_sp %>%
+  filter(permno %in% green_id$`2012`[[1]]) %>%
+  filter(year(date) <= 2017, year(date) >= 2013) %>% 
+  select(date, permno, ret_rf) %>%
+  pivot_wider(names_from = permno, values_from = ret_rf) %>%
+  select(-date) %>% 
+  as.matrix()
+
+factor_mat <- mthly_factor %>% 
+  filter(year(date) <= 2017, year(date) > 2012) %>% 
+  select(-date) %>%
+  as.matrix()
+
+result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
+result_g %>% f_screenplot("Green firms - 6f models - year 2012")
+
+```

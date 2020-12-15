@@ -14,7 +14,7 @@ ifelse(!dir.exists(file.path(mainDir, subDir)), dir.create(file.path(mainDir, su
 library(tidyverse)
 library(lubridate)
 
-load(here::here("data", "monthly_data.rda"))
+load(here::here("data", "raw_data", "monthly_data.rda"))
 data_monthly <- data_monthly %>%
   janitor::clean_names() %>% 
   as_tibble()
