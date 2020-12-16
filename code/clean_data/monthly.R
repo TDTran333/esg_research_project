@@ -29,14 +29,12 @@ factor_data <- data_monthly %>%
   summarize_all(function(x)(mean(x) / 100))
 
 factor_data %>% 
-  as.matrix() %>% 
-  saveRDS(file = here::here("data", "all", "mthly_factor_mat.Rds"))
+  saveRDS(file = here::here("data", "all", "mthly_factor.Rds"))
 
 factor_data %>% 
   filter(year(date) >= start,
          year(date) <= end) %>% 
-  as.matrix() %>% 
-  saveRDS(file = here::here("data", subDir, "mthly_factor_mat.Rds"))
+  saveRDS(file = here::here("data", subDir, "mthly_factor.Rds"))
 
 # Firm Data ---------------------------------------------------------------
 
