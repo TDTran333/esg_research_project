@@ -18,9 +18,10 @@ knitr::opts_chunk$set(echo = FALSE)
 h1.title {
   font-size: 20px;
 }
-blockquote {
-    font-size: 14px;
-}
+caption {
+  font-weight: bold;
+  font-size: 16px;
+} 
 </style>
 
 # Introduction
@@ -35,7 +36,7 @@ library(here)             # Relative paths
 library(tidyverse)        # Data manipulation
 library(tidylog)          # Info about dataframe
 library(lubridate)        # Manage dates
-library(broom)            # Tidy stat functions output
+library(janitor)          # Clean data
 library(summarytools)     # Summary stats
 library(PeerPerformance)  # Alpha screening
 
@@ -86,18 +87,18 @@ f_summarize_data <- function(df, x) {
   {{ df }} %>%
     group_by(date) %>%
     filter(!is.na({{ x }})) %>%
-    summarize(avg = mean({{ x }}),
+    summarize(mean = mean({{ x }}),
               median = median({{ x }}),
               q25 = quantile({{ x }}, 0.25),
-              q75 = quantile({{ x }}, 0.75))
+              q75 = quantile({{ x }}, 0.75)) %>%
+    pivot_longer(c(mean, median), names_to = "measure")
 }
 
 sp %>%
   f_summarize_data(ghg) %>%
-  ggplot(aes(x = date)) +
-  geom_line(aes(y = avg), color = "red", size = 1.2) +
-  geom_line(aes(y = median), color = "blue", lty = 2, size = 1.2) +
-  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  ggplot(aes(x = date, y = value, color = measure)) +
+  geom_line(size = 1.25) +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25, color = "blue") +
   labs(x = "Date",
        y = "Tonnes of CO2-equivalent GHG",
        title = "Greenhouse Gas Emissions Intensity over time.",
@@ -111,18 +112,17 @@ sp %>%
   geom_histogram() +
   labs(x = "GHG",
        y = "Number of firms",
-       title = "Histogram of firms average ghg.",
+       title = "Histogram of Firms Average GHG Intensity Emission.",
        subtitle = paste("Period: ", params$subDir))
 
 sp %>%
   f_summarize_data(envscore) %>%
-  ggplot(aes(x = date)) +
-  geom_line(aes(y = avg), color = "red", size = 1.2) +
-  geom_line(aes(y = median), color = "blue", lty = 2, size = 1.2) +
-  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25) +
+  ggplot(aes(x = date, y = value, color = measure)) +
+  geom_line(size = 1.25) +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.25, color = "blue") +
   labs(x = "Date",
-       y = "Environment score",
-       title = "Environment score over time.",
+       y = "Environment Score",
+       title = "Environment Score over Time.",
        subtitle = paste("Ribbon: 25th-75th percentile. Period: ", params$subDir))
 
 sp %>%
@@ -131,9 +131,9 @@ sp %>%
   filter(!is.nan(avg_envscore)) %>% 
   ggplot(aes(avg_envscore)) +
   geom_histogram() +
-  labs(x = "Environment score",
-       y = "Number of firms",
-       title = "Histogram of firms average environment score.",
+  labs(x = "Environment Score",
+       y = "Number of Firms",
+       title = "Histogram of Firms Average Environment Score.",
        subtitle = paste("Period: ", params$subDir))
 
 ```
@@ -158,9 +158,9 @@ t2 <- sp %>%
 
 t1 %>% 
   inner_join(t2, by = "year", suffix = c("_total", "_ghg")) %>% 
-  janitor::adorn_totals() %>% 
+  adorn_totals() %>% 
   mutate(pct_ghg = (n_firms_ghg / n_firms_total) * 100) %>%
-  knitr::kable(caption = "Percent of firms with ghg data.",
+  knitr::kable(caption = "Percent of Firms with GHG Emission Intensity Data.",
                align = "c",
                digits = 2,
                booktabs = TRUE)
@@ -173,35 +173,45 @@ t1 %>%
 ```{r Descriptive Statistics}
 
 sp %>% 
-  group_by(year(date)) %>% 
+  group_by(Year = year(date)) %>% 
   select(ghg, envscore) %>% 
-  descr()
+  descr(headings = FALSE)
 
 sp %>% 
   select(ghg, envscore) %>% 
-  descr()
+  descr() %>%
+  knitr::kable(caption = paste("Descriptive Statistics for the period covering: ", params$subDir),
+               align = "c",
+               digits = 2,
+               booktabs = TRUE)
 
 sp %>%
-  filter(!is.na(ghg)) %>% 
-  ggplot(aes(ghg)) +
+  filter(!is.na(ghg)) %>%
+  group_by(year = year(date), permno) %>% 
+  summarize(mean = mean(ghg)) %>%
+  select(-permno) %>% 
+  ungroup() %>% 
+  ggplot(aes(mean)) +
   geom_boxplot() +
-  facet_wrap(~year(date)) +
+  facet_wrap(~year) +
+  labs(x = "GHG",
+       title = "Boxplot of Average Firm GHG Emission Intensity per Year.") +
   coord_flip()
 
 sp %>%
   group_by(year(date), permno) %>%
-  summarize(avg_yrly_ghg = mean(ghg),
-            avg_yrly_envscore = mean(envscore)) %>%
+  summarize(mean_ghg = mean(ghg),
+            mean_envscore = mean(envscore)) %>%
   ungroup() %>%
-  select(avg_yrly_ghg, avg_yrly_envscore) %>%
+  select(mean_ghg, mean_envscore) %>%
   descr() %>%
-  knitr::kable(caption = "GHG Emission Intensity and Environment score  data",
+  knitr::kable(caption = "GHG Emission Intensity and Environment Score Data",
                align = "c",
                digits = 2,
                booktabs = TRUE)
 ```
 
-### Groups
+### Classifying Firms
 
 [Insert explanation on how we divided the groups]
 
@@ -239,103 +249,144 @@ ghg_df %>%
   scale_x_continuous(breaks = 2009:2017) +
   labs(x = "Year",
        y = "Firms count",
-       title = "Number of firms by group: Brown, Green, Neutral and Undisclosed.")
+       title = "Firms grouped into : Brown, Green, Neutral and Undisclosed.")
 ```
 
 ```{r Group Id}
 green_id <- ghg_df %>% 
   filter(status == "G") %>%
   select(year, permno) %>%
-  group_by(year, permno) %>%
-  pivot_wider(names_from = year, values_from = permno)
+  pivot_wider(names_from = year, values_from = permno) %>% 
+  clean_names()
 
 brown_id <- ghg_df %>% 
   filter(status == "B") %>%
   select(year, permno) %>%
-  group_by(year, permno) %>%
-  pivot_wider(names_from = year, values_from = permno)
+  pivot_wider(names_from = year, values_from = permno) %>%
+  clean_names()
 ```
 ### Transition Matrix
 
 [Insert comment about transition matrix]
 
 ```{r Transition Matrix}
-x <- c(1,2,1,1,3,4,4,1,2,4,1,4,3,4,4,4,3,1,3,2,3,3,3,4,2,2,3)
-p <- matrix(nrow = 4, ncol = 4, 0)
-for (t in 1:(length(x) - 1)) p[x[t], x[t + 1]] <- p[x[t], x[t + 1]] + 1
-for (i in 1:4) p[i, ] <- p[i, ] / sum(p[i, ])
+
+data_trans_mat <- ghg_df %>%
+  select(year, permno, status) %>%
+  pivot_wider(names_from = permno, values_from = status) %>%
+  ungroup() %>% 
+  select(-year) %>% 
+  as.matrix()
+
+f_trans_matrix <- function(X, byrow = T, prob=T)
+{
+    if(byrow) trans_mat <- table( c(X[,-ncol(X)]), c(X[,-1]) )
+    else trans_mat <- table( c(X[-nrow(X),]), c(X[-1,]) )
+    if(prob) trans_mat <- trans_mat / rowSums(trans_mat)
+    trans_mat
+}
+
+data_trans_mat %>% 
+  f_trans_matrix(byrow = F) %>% 
+  knitr::kable(caption = "Transition Matrix",
+               align = "c",
+               digits = 4,
+               booktabs = TRUE)
+
+# Check
+library(markovchain)
+mcFit <- markovchainFit(data= data_trans_mat, byrow = FALSE)
+mcFit
+
+mcFit$estimate@transitionMatrix %>%
+  knitr::kable(caption = "Transition Matrix",
+               align = "c",
+               digits = 4,
+               booktabs = TRUE)
+
+mcFit$upperEndpointMatrix %>%
+  knitr::kable(caption = "Transition Matrix Upper Confidence Interval",
+               align = "c",
+               digits = 4,
+               booktabs = TRUE)
+
+mcFit$lowerEndpointMatrix %>%
+  knitr::kable(caption = "Transition Matrix Lower Confidence Interval",
+               align = "c",
+               digits = 4,
+               booktabs = TRUE)
 ```
 
 ### Alpha screening
 
 [Insert comment about the methodology]
 
-```{r Alpha Screening: Green Firms - Backward looking}
-ret_g <- mthly_data_sp %>%
-  filter(permno %in% green_id$`2013`[[1]]) %>%
-  filter(year(date) <= 2013) %>% 
-  select(date, permno, ret_rf) %>%
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select(-date) %>% 
-  as.matrix()
+<!-- ```{r Alpha Screening: Green Firms - Backward looking} -->
+<!-- ret_g <- mthly_data_sp %>% -->
+<!--   filter(permno %in% green_id$`2013`[[1]]) %>% -->
+<!--   filter(year(date) <= 2013) %>%  -->
+<!--   select(date, permno, ret_rf) %>% -->
+<!--   pivot_wider(names_from = permno, values_from = ret_rf) %>% -->
+<!--   select(-date) %>%  -->
+<!--   as.matrix() -->
 
-factor_mat <- mthly_factor %>% 
-  filter(year(date) <= 2013) %>% 
-  select(-date) %>%
-  as.matrix()
+<!-- factor_mat <- mthly_factor %>%  -->
+<!--   filter(year(date) <= 2013) %>%  -->
+<!--   select(-date) %>% -->
+<!--   as.matrix() -->
 
-result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
-result_g %>% f_screenplot("Green firms - 6f models - year 2013")
+<!-- result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr) -->
+<!-- result_g %>% f_screenplot("Green firms - 6f models - year 2013") -->
 
-ret_g <- mthly_data_sp %>%
-  filter(permno %in% green_id$`2017`[[1]]) %>%
-  filter(year(date) <= 2017, year(date) > 2012) %>% 
-  select(date, permno, ret_rf) %>%
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select(-date) %>% 
-  as.matrix()
+<!-- ret_g <- mthly_data_sp %>% -->
+<!--   filter(permno %in% green_id$`2017`[[1]]) %>% -->
+<!--   filter(year(date) <= 2017, year(date) > 2012) %>%  -->
+<!--   select(date, permno, ret_rf) %>% -->
+<!--   pivot_wider(names_from = permno, values_from = ret_rf) %>% -->
+<!--   select(-date) %>%  -->
+<!--   as.matrix() -->
 
-factor_mat <- mthly_factor %>% 
-  filter(year(date) <= 2017, year(date) > 2012) %>% 
-  select(-date) %>%
-  as.matrix()
+<!-- factor_mat <- mthly_factor %>%  -->
+<!--   filter(year(date) <= 2017, year(date) > 2012) %>%  -->
+<!--   select(-date) %>% -->
+<!--   as.matrix() -->
 
-result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
-result_g %>% f_screenplot("Green firms - 6f models - year 2017")
-```
+<!-- result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr) -->
+<!-- result_g %>% f_screenplot("Green firms - 6f models - year 2017") -->
+<!-- ``` -->
 
-```{r Alpha Screening: Green Firms - Forward looking}
+<!-- ```{r Alpha Screening: Green Firms - Forward looking} -->
 
-ret_g <- mthly_data_sp %>%
-  filter(permno %in% green_id$`2009`[[1]]) %>%
-  filter(year(date) <= 2014, year(date) >= 2010) %>% 
-  select(date, permno, ret_rf) %>%
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select(-date) %>% 
-  as.matrix()
+<!-- ret_g <- mthly_data_sp %>% -->
+<!--   filter(permno %in% green_id$`2009`[[1]]) %>% -->
+<!--   filter(year(date) <= 2014, year(date) >= 2010) %>%  -->
+<!--   select(date, permno, ret_rf) %>% -->
+<!--   pivot_wider(names_from = permno, values_from = ret_rf) %>% -->
+<!--   select(-date) %>%  -->
+<!--   as.matrix() -->
 
-factor_mat <- mthly_factor %>% 
-  filter(year(date) <= 2013) %>% 
-  select(-date) %>%
-  as.matrix()
+<!-- factor_mat <- mthly_factor %>%  -->
+<!--   filter(year(date) <= 2013) %>%  -->
+<!--   select(-date) %>% -->
+<!--   as.matrix() -->
 
-result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
-result_g %>% f_screenplot("Green firms - 6f models - year 2009")
+<!-- result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr) -->
+<!-- result_g %>% f_screenplot("Green firms - 6f models - year 2009") -->
 
-ret_g <- mthly_data_sp %>%
-  filter(permno %in% green_id$`2012`[[1]]) %>%
-  filter(year(date) <= 2017, year(date) >= 2013) %>% 
-  select(date, permno, ret_rf) %>%
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  select(-date) %>% 
-  as.matrix()
+<!-- ret_g <- mthly_data_sp %>% -->
+<!--   filter(permno %in% green_id$`2012`[[1]]) %>% -->
+<!--   filter(year(date) <= 2017, year(date) >= 2013) %>%  -->
+<!--   select(date, permno, ret_rf) %>% -->
+<!--   pivot_wider(names_from = permno, values_from = ret_rf) %>% -->
+<!--   select(-date) %>%  -->
+<!--   as.matrix() -->
 
-factor_mat <- mthly_factor %>% 
-  filter(year(date) <= 2017, year(date) > 2012) %>% 
-  select(-date) %>%
-  as.matrix()
+<!-- factor_mat <- mthly_factor %>%  -->
+<!--   filter(year(date) <= 2017, year(date) > 2012) %>%  -->
+<!--   select(-date) %>% -->
+<!--   as.matrix() -->
 
-result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr)
-result_g %>% f_screenplot("Green firms - 6f models - year 2012")
+<!-- result_g <- PeerPerformance::alphaScreening(ret_g, factors = factor_mat, control = ctr) -->
+<!-- result_g %>% f_screenplot("Green firms - 6f models - year 2012") -->
 
-```
+<!-- ``` -->
