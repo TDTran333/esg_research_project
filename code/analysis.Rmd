@@ -6,9 +6,15 @@ output:
   html_document:
     toc: true
 params:
-  ctr: list(nCore = 1)
-  subDir: "2009-2017"
-  bucket: 5
+  ctr: list(nCore = 3)        # number of core and other controls
+  subDir: "2009-2017"         # data folder subdirectory
+  bucket: 5                   # number of firms per bucket
+  window: 3                   # Moving average
+  year_bw_start: 2011         
+  year_bw_end: 2017
+  year_fw_start: 2009
+  year_fw_end: 2014
+  factor: "all"               # all : Use six-factor model. Otherwise: Use three-factor model.
 ---
 
 ```{r setup, include=FALSE}
@@ -39,11 +45,10 @@ library(tidylog)          # Info about dataframe
 library(lubridate)        # Manage dates
 library(janitor)          # Clean data
 library(summarytools)     # Summary stats
+library(markovchain)      # Transition matrix
 library(PeerPerformance)  # Alpha screening
 
-source(here("function", "f_summarize_plot.R"))
-source(here("function", "f_tbl_screening.R"))
-source(here("function", "f_screenplot.R"))
+source(here("function", "screening_funs.R"))
 
 sp <- readRDS(here("data", params$subDir, "mthly_data_sp.rds"))
 factor <- readRDS(here("data", params$subDir, "mthly_factor.rds"))
@@ -87,6 +92,17 @@ factor <- readRDS(here("data", params$subDir, "mthly_factor.rds"))
 [Comment on the graphs and histograms.]
 
 ```{r Data Visualization, message=FALSE, results=FALSE}
+f_summarize_plot <- function(df, x) {
+  {{ df }} %>%
+    group_by(date) %>%
+    filter(!is.na({{ x }})) %>%
+    summarize(mean = mean({{ x }}),
+              median = median({{ x }}),
+              q25 = quantile({{ x }}, 0.25),
+              q75 = quantile({{ x }}, 0.75)) %>%
+    pivot_longer(c(mean, median), names_to = "measure")
+}
+
 sp %>%
   f_summarize_plot(ghg) %>%
   ggplot(aes(x = date, y = value, color = measure)) +
@@ -214,20 +230,20 @@ ghg_df <- sp %>%
   group_by(year = year(date), permno) %>%
   summarize(avg_ghg_yr = mean(ghg, na.rm = TRUE)) %>%
   group_by(permno) %>%
-  mutate(avg_ghg_5yr = zoo::rollapplyr(avg_ghg_yr, 
-                             width = 5,
+  mutate(window = zoo::rollapplyr(avg_ghg_yr, 
+                             width = params$window,
                              FUN = function(x) mean(x, na.rm = TRUE), 
                              fill = NA, 
                              partial = TRUE,
                              align = "right")) %>%
-  mutate_at(vars(avg_ghg_yr, avg_ghg_5yr), ~replace(., is.nan(.), NA)) %>% 
+  mutate_at(vars(avg_ghg_yr, window), ~replace(., is.nan(.), NA)) %>% 
   group_by(year) %>% 
-  mutate(q_25 = quantile(avg_ghg_5yr, probs = 0.25, na.rm = TRUE),
-         q_75 = quantile(avg_ghg_5yr, probs = 0.75, na.rm = TRUE)) %>%
-  mutate(status = case_when(is.na(avg_ghg_5yr)  ~ "U",
-                            avg_ghg_5yr <= q_25 ~ "G",
-                            avg_ghg_5yr >= q_75 ~ "B",                           
-                            avg_ghg_5yr < q_75 & avg_ghg_5yr > q_25 ~ "N")) %>%
+  mutate(q_25 = quantile(window, probs = 0.25, na.rm = TRUE),
+         q_75 = quantile(window, probs = 0.75, na.rm = TRUE)) %>%
+  mutate(status = case_when(is.na(window)  ~ "U",
+                            window <= q_25 ~ "G",
+                            window >= q_75 ~ "B",                           
+                            window < q_75 & window > q_25 ~ "N")) %>%
   arrange(permno)
 
 color = c("#cb997e", "#06d6a0", "#bfc0c0", "#ffffff")
@@ -250,31 +266,14 @@ ghg_df %>%
 [Insert comment about transition matrix]
 
 ```{r Transition Matrix}
-data_trans_mat <- ghg_df %>%
+trans_mat <- ghg_df %>%
   select(year, permno, status) %>%
   pivot_wider(names_from = permno, values_from = status) %>%
   ungroup() %>% 
   select(-year) %>% 
   as.matrix()
 
-f_trans_matrix <- function(X, byrow = T, prob=T)
-{
-    if(byrow) trans_mat <- table( c(X[,-ncol(X)]), c(X[,-1]) )
-    else trans_mat <- table( c(X[-nrow(X),]), c(X[-1,]) )
-    if(prob) trans_mat <- trans_mat / rowSums(trans_mat)
-    trans_mat
-}
-
-data_trans_mat %>% 
-  f_trans_matrix(byrow = F) %>% 
-  knitr::kable(caption = "Transition Matrix",
-               align = "c",
-               digits = 4,
-               booktabs = TRUE)
-
-# Check
-library(markovchain)
-mcFit <- markovchainFit(data= data_trans_mat, byrow = FALSE)
+mcFit <- markovchainFit(data = trans_mat, byrow = FALSE)
 mcFit
 
 mcFit$estimate@transitionMatrix %>%
@@ -294,6 +293,23 @@ mcFit$lowerEndpointMatrix %>%
                align = "c",
                digits = 4,
                booktabs = TRUE)
+
+# # Test
+# f_trans_matrix <- function(X, byrow = T, prob=T)
+# {
+#     if(byrow) trans_mat <- table( c(X[,-ncol(X)]), c(X[,-1]) )
+#     else trans_mat <- table( c(X[-nrow(X),]), c(X[-1,]) )
+#     if(prob) trans_mat <- trans_mat / rowSums(trans_mat)
+#     trans_mat
+# }
+# 
+# data_trans_mat %>% 
+#   f_trans_matrix(byrow = F) %>% 
+#   knitr::kable(caption = "Transition Matrix",
+#                align = "c",
+#                digits = 4,
+#                booktabs = TRUE)
+
 ```
 
 ### Alpha screening
@@ -301,92 +317,86 @@ mcFit$lowerEndpointMatrix %>%
 [Insert comment about the methodology]
 
 ```{r Group Id}
-f_create_id <- function(df) {
-  {{ df }} %>%
+f_create_id <- function(df, status) {
+  {{ df }} %>% 
+  filter(status == {{ status }}) %>%
   select(year, permno) %>%
   pivot_wider(names_from = year, values_from = permno) %>% 
   clean_names() %>%
   map(., unlist)
 }
 
-id_all <- ghg_df  %>% f_create_id()
-id_green <- ghg_df %>% filter(status == "G") %>% f_create_id()
-id_brown <- ghg_df %>% filter(status == "B") %>% f_create_id()
-id_neutral <- ghg_df %>% filter(status == "N") %>% f_create_id()
-id_undisclosed <- ghg_df %>% filter(status == "U") %>% f_create_id()
-
-
-ghg_df %>%
-  select(year, permno) %>%
-  pivot_wider(names_from = year, values_from = permno)
+id_green <- ghg_df %>% f_create_id("G")
+id_brown <- ghg_df %>% f_create_id("B")
 ```
 
 ```{r Alpha Screening}
-# Backward looking Green
-input_year <- 2013:2017
-id_group <- "green_id$x"
-f_alpha_screen(sp, factor, id_group, input_year, backward = TRUE, params$ctr)
+# Factor
+if (params$factor == "all") {factor <- factor
+} else {factor <- factor[, 1:3]}
 
-#Forward looking Green
-input_year <- 2009:2012
-id_group <- "green_id$x"
-f_alpha_screen(sp, factor, id_group, input_year, backward = FALSE, params$ctr)
+# Backward looking
+model <- "backward_looking"
+input_year <- seq(params$year_bw_start, params$year_bw_end)
+result_g_bw <- f_alpha_screen(sp, factor, id_group = "id_green$x", input_year, model, params$window, params$ctr)
+result_b_bw <- f_alpha_screen(sp, factor, id_group = "id_brown$x", input_year, model, params$window, params$ctr)
 
-# Backward looking Brown
-input_year <- 2013:2017
-id_group <- "brown_id$x"
-f_alpha_screen(sp, factor, id_group, input_year, backward = TRUE, params$ctr)
-
-#Forward looking Brown
-input_year <- 2009:2012
-id_group <- "brown_id$x"
-f_alpha_screen(sp, factor, id_group, input_year, backward = FALSE, params$ctr)
-
-
-
-f_alpha_screen <- function(df, factor_df, id_group, input_year, backward = TRUE, control) {
-  for (i in input_year) {
-  
-    if (backward) {
-      start_year <- {{i}}
-      end_year <- {{i}} - 4
-      model <- "Backward-Looking Model"
-    } else {
-      start_year <- {{i}} + 1
-      end_year <- {{i}} + 5
-      model <- "Forward-Looking Model"
-    }
-    
-      print(i)
-      
-      ret <- df %>%
-      filter(permno %in% eval(parse(text = paste0(id_group, {{i}})))) %>%
-      filter(year(date) <= start_year,
-             year(date) >= end_year) %>%
-      select(date, permno, ret_rf) %>%
-      pivot_wider(names_from = permno, values_from = ret_rf) %>%
-      select(-date) %>%
-      as.matrix()
-    
-    fctr <- factor_df %>% 
-      filter(year(date) <= start_year,
-             year(date) >= end_year) %>%
-      select(-date) %>% 
-      as.matrix()
-    
-    alpha_screen <- alphaScreening(ret, factors = fctr, control = control)
-    
-    result <- alpha_screen %>% 
-      as_tibble() %>%
-      select(alpha, pizero, pipos, pineg) %>%
-      f_tbl_screening(floor(nrow(.) / params$bucket)) %>%
-      as.tibble()
-    
-    f_screenplot(result, paste0(model, "_", id_group, "_", {{i}}))
-  }
+f_summ_pi <-  function(df) {
+  {{ df }} %>%
+  summarize(avg_pipos = mean(pipos > 1e-6, na.rm = TRUE),
+            avg_pineg = mean(pineg > 1e-6, na.rm = TRUE))
 }
 
+names(result_g_bw) <- input_year
+names(result_b_bw) <- input_year
 
-source(here("function", "f_screenplot.R"))
-source(here("function", "f_alpha_screen.R"))
+result_g_bw %>%
+  map(f_summ_pi) %>%
+  transpose() %>%
+  do.call(rbind, .) %>%
+  as.data.frame() %>%
+  knitr::kable(caption = "Average outperformance ratio for Green - Backward Looking.",
+               align = "c",
+               booktabs = TRUE)
+result_g_bw %>%
+  map(f_summ_pi) %>%
+  transpose() %>%
+  do.call(rbind, .) %>%
+  as.data.frame() %>%
+  knitr::kable(caption = "Average outperformance ratio for Brown - Backward Looking.",
+               align = "c",
+               booktabs = TRUE)
+
+#Forward looking Green
+model <- "forward_looking"
+input_year <- seq(params$year_fw_start, params$year_fw_end)
+result_g_fw <- f_alpha_screen(sp, factor, id_group = "id_green$x", input_year, model, params$window, params$ctr)
+result_b_fw <- f_alpha_screen(sp, factor, id_group = "id_brown$x", input_year, model, params$window, params$ctr)
+
+names(result_g_fw) <- input_year
+names(result_b_fw) <- input_year
+
+result_g_fw %>%
+  map(f_summ_pi) %>%
+  transpose() %>%
+  do.call(rbind, .) %>%
+  as.data.frame() %>%
+  knitr::kable(caption = "Average outperformance ratio for Green - Forward Looking.",
+               align = "c",
+               booktabs = TRUE)
+
+result_b_fw %>%
+  map(f_summ_pi) %>%
+  transpose() %>%
+  do.call(rbind, .) %>%
+  as.data.frame() %>%
+  knitr::kable(caption = "Average outperformance ratio for Brown - Forward Looking.",
+               align = "c",
+               booktabs = TRUE)
+
+
+source(here("function", "screening_funs.R"))
+
+
+
 ```

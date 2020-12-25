@@ -1,20 +1,22 @@
 
+library(tidyverse)
+library(lubridate)
+library(here)
+
 # Options -----------------------------------------------------------------
 
 start <- "2009"
 end   <- "2017"
 
-mainDir <- here::here("data")
+mainDir <- here("data")
 subDir <- paste0(start, "-", end)
 
 ifelse(!dir.exists(file.path(mainDir, subDir)), dir.create(file.path(mainDir, subDir)), FALSE)
 
 # Load Data ---------------------------------------------------------------
 
-library(tidyverse)
-library(lubridate)
+load(here("data", "raw_data", "daily_data.rda"))
 
-load(here::here("data", "raw_data", "daily_data.rda"))
 data_daily <- data_daily %>%
   janitor::clean_names() %>% 
   as_tibble()
@@ -29,14 +31,12 @@ factor_data <- data_daily %>%
   summarize_all(function(x)(mean(x) / 100))
 
 factor_data %>% 
-  as.matrix() %>% 
-  saveRDS(file = here::here("data", "all", "daily_factor_mat.rds"))
+  saveRDS(file = here("data", "all", "dly_factor.rds"))
 
 factor_data %>% 
   filter(year(date) >= start,
          year(date) <= end) %>% 
-  as.matrix() %>% 
-  saveRDS(file = here::here("data", subDir, "daily_factor_mat.rds"))
+  saveRDS(file = here("data", subDir, "dly_factor.rds"))
 
 # Firm Data ---------------------------------------------------------------
 
@@ -50,12 +50,12 @@ dly_data <- data_daily %>%
   select(date, permno, ret_rf, ghg, envscore)
 
 dly_data %>% 
-  saveRDS(file = here::here("data", "all", "dly_data.rds"))
+  saveRDS(file = here("data", "all", "dly_data.rds"))
 
 dly_data %>% 
   filter(year(date) >= start,
          year(date) <= end) %>% 
-  saveRDS(file = here::here("data", subDir, "dly_data.rds"))
+  saveRDS(file = here("data", subDir, "dly_data.rds"))
 
 # SP Firm Data ------------------------------------------------------------
 
@@ -70,12 +70,12 @@ dly_data_sp <- data_daily %>%
   select(date, permno, ret_rf, ghg, envscore, spmim)
 
 dly_data_sp %>% 
-  saveRDS(file = here::here("data", "all", "dly_data_sp.rds"))
+  saveRDS(file = here("data", "all", "dly_data_sp.rds"))
 
 dly_data_sp %>% 
   filter(year(date) >= start,
          year(date) <= end) %>% 
-  saveRDS(file = here::here("data", subDir, "dly_data_sp.rds"))
+  saveRDS(file = here("data", subDir, "dly_data_sp.rds"))
 
 # Counting observations ---------------------------------------------------
 # 
@@ -123,4 +123,4 @@ dly_data_sp %>%
 # tbl[5,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp023)) %>% select(permno) %>% dstnct_cnt_mat()
 # tbl[6,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp096)) %>% select(permno) %>% dstnct_cnt_mat()
 # 
-# write.csv(tbl, file = here::here("code", "clean_data", "dly_summ_tbl.csv"))
+# write.csv(tbl, file = here("code", "clean_data", "dly_summ_tbl.csv"))
