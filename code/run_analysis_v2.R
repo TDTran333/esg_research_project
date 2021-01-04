@@ -90,11 +90,22 @@ mcFit$estimate@transitionMatrix %>%
 
 # Alpha screening ---------------------------------------------------------
 
-# Inputs declaration
-
 date_col <- ghg_df %>% select(date) %>% distinct() %>% pluck()
 
-# Identify a list of permno for each quarter / month
+
+
+# Functions Descriptions --------------------------------------------------
+
+# 0. f_main:            Main module
+# 1. f_create_id:       Identify a list of permno for each quarter / month
+# 2. f_return_date:     create start_date and end_date for loop
+# 3. f_ret_mat:         Generate ret_mat from data_df
+# 4. f_factor_mat:      Generate factor_mat from factor_df
+# 5. alpha screen:      Alpha screening function
+# 6. f_alpha_cor:       Alpha correlations
+# 7. f_tbl_screening:   Summary table of probability ratios
+# 8. f_screenplot:      Create screenplot
+# 
 
 f_create_id <- function(df, status) {
   df %>% 
@@ -111,15 +122,10 @@ id <- list()
 id["green"] <- ghg_df %>% f_create_id("G") %>% list()
 id["brown"] <- ghg_df %>% f_create_id("B") %>% list()
 
-# Prepare inputs according to options
-
-paste_ <- partial(paste, sep = "_")
-
-
 f_return_date <- function(date_col, window, model, datafreq) {
   
-  date_yqtr <- compose(as.Date.yearqtr, as.yearqtr)
-  date_ymon <- compose(as.Date.yearmon, as.yearmon)
+  # date_yqtr <- compose(as.Date.yearqtr, as.yearqtr)
+  # date_ymon <- compose(as.Date.yearmon, as.yearmon)
   
   dt_qtr <- map(date_col, date_yqtr)
   dt_mon <- map(date_col, date_ymon)
@@ -147,10 +153,10 @@ f_return_date <- function(date_col, window, model, datafreq) {
 
 # Main function -----------------------------------------------------------
 
-f_main <- function(data,
-                   factor,
+f_main <- function(data_df,
+                   factor_df,
                    factor_model = c("three", "six"),
-                   id,
+                   id_group,
                    date_col,
                    model = c("bw", "fw"),
                    datafreq = c("mthly", "dly"),
@@ -158,69 +164,78 @@ f_main <- function(data,
                    bucket,
                    control) {
   
+  # composite and partial functions
+  date_yqtr <- compose(as.Date.yearqtr, as.yearqtr)
+  date_ymon <- compose(as.Date.yearmon, as.yearmon)
+  eval_expr <- compose(eval, parse)
+  paste_    <- partial(paste, sep = "_")
+  
   factor_model <- match.arg(factor_model)
   model        <- match.arg(model)
   datafreq     <- match.arg(datafreq)
   out_path     <- paste_(model, window, "m", factor_model, "figs")
   
-  if(datafreq == "mthly") {
-    wind_adj <- params$window / 3
-    fw_start <- 4
-  } else { 
-    wind_adj <- params$window
-    fw_start <- 12
-  }
+  wind_adj <- if(datafreq == "mthly") params$window / 3 else params$window
+  fw_start <- if(datafreq == "mthly") 4 else 12
+  id_date  <- if (model == "bw") {date_col[-(1:(wind_adj - 1)), ]} 
+              else {date_col[fw_start:(nrow(date_col) - wind_adj), ]}
 
-  if (model == "bw") {
-    id_date  <- date_col[-(1:(wind_adj - 1)), ]
-  } else {
-    id_date  <- date_col[fw_start:(nrow(date_col) - wind_adj), ]
-  }
-
-  dt <- f_return_date(id_date, window, model, datafreq)
+  dates <- f_return_date(id_date, window, model, datafreq)
+  
+  out <- list()
 
   for (i in seq_along(id_date$date)) {
     print(id_date$date[i])
-    print(dt$start_date[i])
-    print(dt$end_date[i])
+
+    ret_mat <- f_ret_mat(data_df, id_group, id_date$date[i], dates$start_date[i], dates$end_date[i])
+    factor_mat <- f_factor_mat(factor_df, dates$start_date[i], dates$end_date[i])
+
+    alpha_screen <- PeerPerformance::alphaScreening(ret_mat, factors = factor_mat, control = control)
+    out <- append(out, list(alpha_screen))
   }
+  names(out) <- id_date$date
+  
+  print("completed!")
+  
+  return(out)
 }
 
+f_my_main <- partial(f_main, 
+                     window = params$window,
+                     bucket = params$bucket,
+                     control = params$control)
 
-  
-f_main(sp_df, 
-       factor_df, 
-       params$factor, 
-       id$green, 
-       date_col,
-       model = "fw",
-       datafreq = "mthly",
-       params$window,
-       params$bucket,
-       params$control)
-  
-  
-  
-  
-  
-
-
-# function to create id
-
+alpha_screen <- f_main(sp_df, 
+                       factor_df, 
+                       params$factor, 
+                       id$green, 
+                       date_col,
+                       model = "fw",
+                       datafreq = "mthly",
+                       params$window,
+                       params$bucket,
+                       params$control)
 
 
 # function to convert df to matrix
 
-f_ret_mat <- function(df, id) {
-  ret_mat <- df %>%
-    filter(permno %in% id) %>%
+f_ret_mat <- function(data_df, id_group, id_date, start_date, end_date) {
+  # eval_expr <- compose(eval, parse)
+
+  id_string <- paste0("id_group$'", id_date,"'")
+  id_vec <- eval_expr(text = id_string)
+
+  ret_mat <- data_df %>%
+    filter(permno %in% id_vec) %>%
     filter(date >= start_date,
            date <= end_date) %>%
     select(date, permno, ret_rf) %>%
     pivot_wider(names_from = permno, values_from = ret_rf) %>%
-    janitor::remove_empty(which = "cols") %>% 
+    janitor::remove_empty(which = "cols") %>%
     select(-date) %>%
     as.matrix()
+  
+  return(ret_mat)
 }
 
 f_factor_mat <- function(factor_df, start_date, end_date) {
@@ -229,6 +244,8 @@ f_factor_mat <- function(factor_df, start_date, end_date) {
            date <= end_date) %>%
     select(-date) %>% 
     as.matrix()
+  
+  return()
 }
 
 
@@ -238,45 +255,11 @@ f_factor_mat <- function(factor_df, start_date, end_date) {
 
 
 
-ret_mat <- sp_df %>% 
-  filter(permno %in% id$green[[12]]) %>% 
-  filter(date >= start_date,
-         date <= end_date) %>%
-  select(date, permno, ret_rf) %>%
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  janitor::remove_empty(which = "cols") %>% 
-  select(-date) %>%
-  as.matrix()
-
-factor_mat <- factor_df %>% 
-  filter(date >= start_date,
-         date <= end_date) %>%
-  select(-date) %>% 
-  as.matrix()
-
-# alpha screen
-alpha_screen <- PeerPerformance::alphaScreening(ret_mat, factors = factor_mat, control = control)
-
-# function for correlation
-
-
-
-# function for tbl screening
 
 
 
 
-# function for results output
-
-
-
-
-
-
-
-
-
-.f_alpha_cor <- function(ret_mat, factor_mat, input_date) {
+f_alpha_cor <- function(ret_mat, factor_mat, input_date) {
   lst <-  list()
   
   for (i in 1:ncol(ret_mat)) {
@@ -301,7 +284,6 @@ alpha_screen <- PeerPerformance::alphaScreening(ret_mat, factors = factor_mat, c
   return(out)
 }
 
-f_alpha_cor <- compiler::cmpfun(.f_alpha_cor)
 
 
 
@@ -403,31 +385,6 @@ f_alpha_screen <- compiler::cmpfun(.f_alpha_screen)
 
 
 
-pos    <- order(df$alpha, decreasing = TRUE)
-n      <- nrow(df)
-ngroup <- floor(n / nblock)
-tbl    <- matrix(data = NA, nrow = nblock, ncol = 4)
-for (i in 1:nblock) {
-  idx <- pos[((i - 1) * ngroup + 1):(i * ngroup)]
-  if (i == nblock) {
-    idx <- pos[((i - 1) * ngroup + 1):n]
-  }
-  idx           <- idx[!is.na(idx)]
-  tbl[i, 1]     <- mean(df$alpha[idx])
-  tbl[i, 2:4]   <- colMeans(df[idx, c("pipos", "pizero", "pineg")])
-  colnames(tbl) <- c("alpha", "pipos", "pizero", "pineg")
-}
-if (do_norm) {
-  tmp <- tbl[, 2:4]
-  tmp <- sweep(tmp, 2, rowSums(tmp), "/")
-  tbl[, 2:4] <- tmp
-}
-return(tbl)
-
-
-
-
-
 
 
 .f_tbl_screening  <- function(df, nblock, do_norm = TRUE) {
@@ -454,9 +411,6 @@ return(tbl)
 }
 
 f_tbl_screening <- compiler::cmpfun(.f_tbl_screening)
-
-
-
 
 
 .f_screenplot <- function(df, title, folder, datafreq) {
