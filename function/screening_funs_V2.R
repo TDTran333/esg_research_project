@@ -3,41 +3,113 @@ shhh(require(lubridate))               # Date management
 
 # Functions Descriptions --------------------------------------------------
 
-# 1. f_create_id:       Identify a list of permno for each period for a group
-# 2. f_return_date:     create start_date and end_date for loop
-# 3. f_ret_mat:         Generate ret_mat from data_df
-# 4. f_factor_mat:      Generate factor_mat from factor_df
-# 5. alpha screen:      Alpha screening function
-# 6. f_alpha_cor:       Alpha correlations
-# 7. f_tbl_screening:   Summary table of probability ratios
-# 8. f_screenplot:      Create screenplot
+# 1. f_create_esg_type:  Create ESG type by quantile of rolling mean of esg variable
+# 2. f_create_trans_mat: Create transition matrix
+# 3. f_create_id:        Identify a list of permno by ESG group
+# 4. f_create_dates:     create dates for loop
+# 5. f_ret_mat:          Generate ret_mat from data_df
+# 6. f_factor_mat:       Generate factor_mat from factor_df
+# 7. alpha screen:       Alpha screening function
+# 8. f_alpha_cor:        Alpha correlations
+# 9. f_tbl_screening:    Summary table of probability ratios
+# 10. f_screenplot:      Create screenplot
+# 11. f_tidy_pi_result:  Create tidy df of pi results for plotting
 
+# 13. f_tidy_n_obs:      Create tidy df of concordant obs for plotting
+# 14. f_plot_hist_obs:   Plot histograms of concordant obs
+# 15. f_tidy_alpha_cor:  Create tidy df of alpha cor plotting
+# 16. f_plot_hist_cor:   Plot histograms of alpha cor
 
 # -------------------------------------------------------------------------
 
-.f_create_id <- function(.df, .status) {
+.f_create_esg_type <- function(.df, .esg_var, .datafreq, .window) {
+  
+  .esg_var <- match.arg(.esg_var, c("ghg", "envscore"))
+  .datafreq <- match.arg(.datafreq,  c("monthly", "dly"))
+  
+  quantile_na_rm <- partial(quantile, na.rm =  TRUE)
+
+  .df %>%
+    select(date, permno, .data[[.esg_var]]) %>% 
+    mutate(date = if(.datafreq == "monthly") {as.yearqtr(date)}
+           else {as.yearmon(date)}) %>%
+    group_by(date, permno) %>%
+    summarize(mean_esg_var = mean_na_rm(.data[[.esg_var]])) %>% 
+    group_by(permno) %>%
+    mutate(rollwin = rollapplyr(mean_esg_var,
+                                width = if(.datafreq == "monthly") {
+                                  .window / 3}
+                                else {.window},
+                                FUN = function(x) mean(x, na.rm = TRUE),
+                                fill = NA,
+                                partial = TRUE,
+                                align = "right")) %>%
+    mutate_at(vars(mean_esg_var, rollwin), ~ replace(., is.nan(.), NA)) %>%
+    group_by(date) %>%
+    mutate(q_25 = quantile_na_rm(rollwin, probs = 0.25),
+           q_50 = quantile_na_rm(rollwin, probs = 0.50),
+           q_75 = quantile_na_rm(rollwin, probs = 0.75)) %>%
+    mutate(esg_type = case_when(is.na(rollwin)  ~ "U",
+                                rollwin <= q_25 ~ "G",
+                                rollwin >= q_75 ~ "B",
+                                rollwin < q_75 & rollwin > q_25 ~ "N")) %>%
+    arrange(permno, date) %>%
+    ungroup()
+}
+f_create_esg_type <- compiler::cmpfun(.f_create_esg_type)
+
+# -------------------------------------------------------------------------
+
+.f_create_trans_mat <- function(.df) {
+  
+  trans_mat <- .df %>%
+    select(date, permno, esg_type) %>%
+    pivot_wider(names_from = permno, values_from = esg_type) %>%
+    select(-date) %>% 
+    as.matrix()
+  
+  mcFit <- markovchainFit(data = trans_mat, byrow = FALSE)
+  
+  mcFit$estimate@transitionMatrix %>% 
+    rbind(mcFit$upperEndpointMatrix, mcFit$lowerEndpointMatrix)
+  
+}
+f_create_trans_mat <- compiler::cmpfun(.f_create_trans_mat)
+
+# -------------------------------------------------------------------------
+
+.f_create_id <- function(.df, .esg_type) {
   .df %>% 
-    filter(status == {{ .status }}) %>%
+    filter(esg_type == {{ .esg_type }}) %>%
     select(date, permno) %>%
     group_by(date) %>% 
     mutate(row = row_number()) %>%
     pivot_wider(names_from = date, values_from = permno) %>%
     select(-row) %>% 
-    map(unlist)
+    map(unlist) %>% 
+    list()
 }
 f_create_id <- compiler::cmpfun(.f_create_id)
 
 # -------------------------------------------------------------------------
 
-.f_return_date <- function(.date, .window, .model, .datafreq) {
+.f_create_dates <- function(.date, .window, .model, .datafreq) {
   
+  .model    <- match.arg(.model, c("bw", "fw"))
+  .datafreq <- match.arg(.datafreq, c("monthly", "daily"))
+  
+  wind_adj <- if(.datafreq == "monthly") .window / 3 else .window
+  fw_start <- if(.datafreq == "monthly") 4 else 12
+  id_date  <- if(.model == "bw") {.date[-(1:(wind_adj - 1)), ]} 
+              else {.date[fw_start:(nrow(.date) - wind_adj), ]}
+
   date_yqtr <- compose(as.Date.yearqtr, as.yearqtr)
   date_ymon <- compose(as.Date.yearmon, as.yearmon)
-  date_qtr  <- map(.date, date_yqtr)
-  date_mon  <- map(.date, date_ymon)
-  
+  date_qtr  <- map(id_date, date_yqtr)
+  date_mon  <- map(id_date, date_ymon)
+
   if (.model == "bw") {
-    if (.datafreq == "mthly") {
+    if (.datafreq == "monthly") {
       start_date <- date_qtr %>% map(~ .x %m-% months(.window - 3))
       end_date   <- date_qtr %>% map(~ .x %m+% months(2))
     } else {
@@ -45,7 +117,7 @@ f_create_id <- compiler::cmpfun(.f_create_id)
       end_date   <- date_mon %>% map(~ .x %m+% months(1) %m-% days(1))
     }
   } else {
-    if (.datafreq == "mthly") {
+    if (.datafreq == "monthly") {
       start_date <- date_qtr %>% map(~ .x %m+% months(3))
       end_date   <- date_qtr %>% map(~ .x %m+% months(.window + 2))
     } else {
@@ -53,10 +125,11 @@ f_create_id <- compiler::cmpfun(.f_create_id)
       end_date   <- date_mon %>% map(~ .x %m+% months(.window + 1) %m-% days(1))
     }
   }
-  out <- tibble(start_date, end_date) %>% unnest(cols = c(start_date, end_date))
+  out <- cbind(id_date, start_date, end_date)
+  colnames(out) <- c("id_date", "start_date", "end_date")
   return(out)
 }
-f_return_date <- compiler::cmpfun(.f_return_date)
+f_create_dates <- compiler::cmpfun(.f_create_dates)
 
 # -------------------------------------------------------------------------
 
@@ -165,7 +238,7 @@ f_tbl_screening <- compiler::cmpfun(.f_tbl_screening)
   ifelse(!dir.exists(file.path(dir)), dir.create(file.path(dir)), FALSE)
   png(file = here::here(dir, paste0("fig_screenplot_", .fig_title, ".png")), width = 700, height = 700)
   
-  mult <- if(.datafreq == "mthly") 12 else 252
+  mult <- if(.datafreq == "monthly") 12 else 252
   
   cex = cex.axis = 0.8
   par(mfrow = c(1, 2))
@@ -193,6 +266,75 @@ f_tbl_screening <- compiler::cmpfun(.f_tbl_screening)
   dev.off()
 }
 f_screenplot <- compiler::cmpfun(.f_screenplot)
+
+# -------------------------------------------------------------------------
+
+.f_tidy_pi_result <- function(.tbl_screening, .id_date, .model_name) {
+  .tbl_screening %>%
+    map(mean_pi) %>%
+    transpose() %>%
+    map(rbind) %>% 
+    unlist() %>% 
+    matrix(byrow=T, ncol = 2) %>% 
+    `colnames<-`(c("pipos", "pineg")) %>%
+    as_tibble() %>% 
+    mutate(date = .id_date) %>%
+    mutate(model = {{ .model_name }}) %>% 
+    pivot_longer(-c(date, model))
+}
+f_tidy_pi_result <- compiler::cmpfun(.f_tidy_pi_result)
+
+# -------------------------------------------------------------------------
+
+.f_tidy_n_obs <- function(.alphascreen, .id_date) {
+  .alphascreen %>%
+    map("n") %>% 
+    bind_rows() %>%
+    mutate(date = .id_date) %>% 
+    pivot_longer(-date, names_to = "permno", values_to = "obs") 
+}
+f_tidy_n_obs <- compiler::cmpfun(.f_tidy_n_obs)
+
+# -------------------------------------------------------------------------
+
+.f_plot_hist_obs <- function(.tidy_n_obs, .model_name){
+  .tidy_n_obs %>% 
+    filter(!is.na(obs)) %>%
+    ggplot(aes(obs)) +
+    geom_histogram(bins = 30) +
+    facet_wrap(~date) +
+    labs(title = paste0("Concordant observations for ", .model_name))
+}
+f_plot_hist_obs <- compiler::cmpfun(.f_plot_hist_obs)
+
+# -------------------------------------------------------------------------
+
+.f_tidy_alpha_cor <- function(.alpha_cor) {
+  .alpha_cor %>%
+    bind_rows() %>% 
+    mutate(date = factor(date)) %>%
+    select(date, correlation) %>% 
+    pivot_longer(-date) %>% 
+    filter(!is.na(value))
+}
+f_tidy_alpha_cor <- compiler::cmpfun(.f_tidy_alpha_cor)
+
+# -------------------------------------------------------------------------
+
+.f_plot_hist_cor <- function(.tidy_alpha_cor, .model_name)  {
+  .tidy_alpha_cor %>% 
+    ggplot(aes(value)) +
+    geom_histogram(bins = 30) +
+    facet_wrap(~date) +
+    geom_vline(xintercept = -0.3, lty = "dashed") +
+    geom_vline(xintercept = 0.3, lty = "dashed") + 
+    labs(title = paste0("Correlations of alphas for ", .model_name),
+         subtitle = "Dashed lines correspond to -0.3 and +0.3")
+}
+f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
+
+# -------------------------------------------------------------------------
+
 
 # -------------------------------------------------------------------------
 

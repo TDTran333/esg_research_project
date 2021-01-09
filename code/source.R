@@ -14,4 +14,4 @@ shhh(require(zoo))              # For rolling window
 shhh(require(stringr))          # String manipulation
 shhh(require(widyr))            # Pairwise correlation
 
-source(here("function", "screening_funs.R"))
+source(here("function", "screening_funs_v2.R"))

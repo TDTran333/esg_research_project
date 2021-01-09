@@ -30,16 +30,16 @@ factor_data <- data_monthly %>%
   summarize_all(function(x)(mean(x) / 100))
 
 factor_data %>% 
-  saveRDS(file = here("data", "all", "mthly_factor.Rds"))
+  saveRDS(file = here("data", "all", "monthly_factor.Rds"))
 
 factor_data %>% 
   filter(year(date) >= start,
          year(date) <= end) %>% 
-  saveRDS(file = here("data", subDir, "mthly_factor.Rds"))
+  saveRDS(file = here("data", subDir, "monthly_factor.Rds"))
 
 # Firm Data ---------------------------------------------------------------
 
-mthly_data <- data_monthly %>%
+monthly_data <- data_monthly %>%
   mutate(ghg = ifelse(!is.na(enerdp023) | !is.na(enerdp096), 
                (replace_na(enerdp023, 0) + replace_na(enerdp023, 0)) / revt_std, NA),
          ret_rf = (ret - rf) / 100,
@@ -48,17 +48,17 @@ mthly_data <- data_monthly %>%
   mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore)
 
-mthly_data %>% 
-  saveRDS(file = here("data", "all", "mthly_data.Rds"))
+monthly_data %>% 
+  saveRDS(file = here("data", "all", "monthly_data.Rds"))
 
-mthly_data %>% 
+monthly_data %>% 
   filter(year(date) >= start,
          year(date) <= end) %>% 
-  saveRDS(file = here("data", subDir, "mthly_data.Rds"))
+  saveRDS(file = here("data", subDir, "monthly_data.Rds"))
 
 # SP Firm Data ------------------------------------------------------------
 
-mthly_data_sp <- data_monthly %>%
+monthly_data_sp <- data_monthly %>%
   filter(!is.na(spmim)) %>%
   mutate(ghg = ifelse(!is.na(enerdp023) | !is.na(enerdp096), 
                       (replace_na(enerdp023, 0) + replace_na(enerdp023, 0)) / revt_std, NA),
@@ -68,13 +68,13 @@ mthly_data_sp <- data_monthly %>%
   mutate(ghg = DescTools::Winsorize(ghg, probs = c(0.005, 0.995), na.rm = TRUE)) %>%
   select(date, permno, ret_rf, ghg, envscore, spmim)
 
-mthly_data_sp %>% 
-  saveRDS(file = here("data", "all", "mthly_data_sp.Rds"))
+monthly_data_sp %>% 
+  saveRDS(file = here("data", "all", "monthly_data_sp.Rds"))
 
-mthly_data_sp %>% 
+monthly_data_sp %>% 
   filter(year(date) >= start,
          year(date) <= end) %>% 
-  saveRDS(file = here("data", subDir, "mthly_data_sp.Rds"))
+  saveRDS(file = here("data", subDir, "monthly_data_sp.Rds"))
 
 # Counting observations ---------------------------------------------------
 
