@@ -14,7 +14,7 @@ shhh(require(lubridate))               # Date management
 # 9. f_tbl_screening:    Summary table of probability ratios
 # 10. f_screenplot:      Create screenplot
 
-# f_main_procoess:       Runs the previous 10 functions.
+# f_main_process:        Runs the previous 10 functions.
 
 # 11. f_tidy_screening:  Create tidy df of pi results for plotting
 # 12. f_tidy_n_obs:      Create tidy df of concordant obs for plotting
@@ -22,6 +22,9 @@ shhh(require(lubridate))               # Date management
 # 14. f_tidy_results:    Regroup the previous 3 functions
 # 15. f_plot_hist_obs:   Plot histograms of concordant obs
 # 16. f_plot_hist_cor:   Plot histograms of alpha cor
+# 17. f_plot_line_pi:    Plot line plot of pi ratios
+
+# 18. f_port_permno:     Create list of permno for portfolio
 
 # -------------------------------------------------------------------------
 
@@ -141,7 +144,7 @@ f_create_dates <- compiler::cmpfun(.f_create_dates)
   
   eval_expr <- compose(eval, parse)
   id_string <- paste0(".id$'", .id_date,"'")
-  id_vec <- eval_expr(text = id_string)
+  id_vec    <- eval_expr(text = id_string)
 
   ret_mat <- .df %>%
     filter(permno %in% id_vec) %>%
@@ -153,7 +156,7 @@ f_create_dates <- compiler::cmpfun(.f_create_dates)
     select(-date) %>%
     as.matrix()
   
-  return(ret_mat)
+  return(list(ret_mat, id_vec))
 }
 f_ret_mat <- compiler::cmpfun(.f_ret_mat)
 
@@ -236,9 +239,9 @@ f_tbl_screening <- compiler::cmpfun(.f_tbl_screening)
 
 # -------------------------------------------------------------------------
 
-.f_screenplot <- function(.df, .fig_title, .model_name, .datafreq) {
+.f_screenplot <- function(.df, .fig_title, .datafreq) {
   
-  dir <- here::here("output", "figures", .model_name)
+  dir <- here::here("output", "figures")
   ifelse(!dir.exists(file.path(dir)), dir.create(file.path(dir)), FALSE)
   png(here::here(dir, paste0("fig_screenplot_", .fig_title, ".png")), width = 700, height = 700)
   
@@ -306,18 +309,6 @@ f_tidy_n_obs <- compiler::cmpfun(.f_tidy_n_obs)
 
 # -------------------------------------------------------------------------
 
-.f_plot_hist_obs <- function(.tidy_n_obs, .model_name){
-  .tidy_n_obs %>% 
-    filter(!is.na(obs)) %>%
-    ggplot(aes(obs)) +
-    geom_histogram(bins = 30) +
-    facet_wrap(~date) +
-    labs(title = paste0("Concordant observations for ", .model_name))
-}
-f_plot_hist_obs <- compiler::cmpfun(.f_plot_hist_obs)
-
-# -------------------------------------------------------------------------
-
 .f_tidy_alpha_cor <- function(.alpha_cor) {
   .alpha_cor %>%
     bind_rows() %>% 
@@ -326,20 +317,6 @@ f_plot_hist_obs <- compiler::cmpfun(.f_plot_hist_obs)
     filter(!is.na(value))
 }
 f_tidy_alpha_cor <- compiler::cmpfun(.f_tidy_alpha_cor)
-
-# -------------------------------------------------------------------------
-
-.f_plot_hist_cor <- function(.tidy_alpha_cor, .model_name)  {
-  .tidy_alpha_cor %>% 
-    ggplot(aes(value)) +
-    geom_histogram(bins = 30) +
-    facet_wrap(~date) +
-    geom_vline(xintercept = -0.3, lty = "dashed") +
-    geom_vline(xintercept = 0.3, lty = "dashed") + 
-    labs(title = paste0("Correlations of alphas for ", .model_name),
-         subtitle = "Dashed lines correspond to -0.3 and +0.3")
-}
-f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
 
 # -------------------------------------------------------------------------
 
@@ -354,4 +331,62 @@ f_tidy_results <- compiler::cmpfun(.f_tidy_results)
 
 # -------------------------------------------------------------------------
 
+.f_plot_line_pi <- function(.tidy_screening, .model_name) {
+  .tidy_screening%>% 
+    ggplot(aes(date, value, color = name)) +
+    geom_line() +
+    scale_x_yearqtr(format = "%Y-Q%q") +
+    labs(title = paste0("Mean Out/Under-Performance Ratios using ",params$window, "-months rolling window."),
+         x = "Date",
+         y = "Percent",
+         color = "Pi Ratios") +
+    scale_y_continuous(labels = percent)
+}
+f_plot_line_pi <- compiler::cmpfun(.f_plot_line_pi)
 
+# -------------------------------------------------------------------------
+
+.f_plot_hist_obs <- function(.tidy_n_obs, .model_name){
+  .tidy_n_obs %>% 
+    filter(!is.na(obs)) %>%
+    ggplot(aes(obs)) +
+    geom_histogram(bins = 30) +
+    facet_wrap(~ factor(date)) +
+    labs(title = paste0("Concordant observations for ", .model_name))
+}
+f_plot_hist_obs <- compiler::cmpfun(.f_plot_hist_obs)
+
+# -------------------------------------------------------------------------
+
+.f_plot_hist_cor <- function(.tidy_alpha_cor, .model_name)  {
+  .tidy_alpha_cor %>% 
+    ggplot(aes(value)) +
+    geom_histogram(bins = 30) +
+    facet_wrap(~ factor(date)) +
+    geom_vline(xintercept = -0.3, lty = "dashed") +
+    geom_vline(xintercept = 0.3, lty = "dashed") + 
+    labs(title = paste0("Correlations of alphas for ", .model_name),
+         subtitle = "Dashed lines correspond to -0.3 and +0.3")
+}
+f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
+
+# -------------------------------------------------------------------------
+
+.f_port_permno <- function(.alpha_screen, .id, .id_date) {
+  eval_expr <- compose(eval, parse)
+  id_string <- paste0(".id$'", .id_date,"'")
+  id_expr   <- eval_expr(text = id_string)
+  id_vec    <- id_expr %>% as_tibble() %>% filter(!is.na(.)) %>% unlist()
+  
+  permno <- .alpha_screen %>%
+    as_tibble() %>%
+    select(pipos, pineg) %>% 
+    mutate(permno = id_vec)
+  
+  top_10    <- permno %>% slice_max(pipos, n = 10)
+  bottom_10 <- permno %>% slice_max(pineg, n = 10)
+  benchmark <- permno %>% filter(!permno %in% c(top_10$permno, bottom_10$permno))
+  list(top_10$permno, bottom_10$permno, benchmark$permno) %>% 
+    `names<-`(c("top_10", "bottom_10", "benchmark"))
+}
+f_port_permno <- compiler::cmpfun(.f_port_permno)

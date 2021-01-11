@@ -14,4 +14,6 @@ shhh(require(zoo))              # For rolling window
 shhh(require(stringr))          # String manipulation
 shhh(require(widyr))            # Pairwise correlation
 
+options(dplyr.summarise.inform = FALSE)
+
 source(here("function", "screening_funs_v2.R"))

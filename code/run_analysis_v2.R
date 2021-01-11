@@ -53,10 +53,12 @@ f_process_model <- function(.df, .factor_df, .factor_model, .id, .date, .model,
   # Create Dates
   dates <- f_create_dates(.date, .window, .model, .datafreq)
 
-  folder_name <- paste(.model, .window, "m_window", .factor_model, 
+  model_name <- paste(.model, .window, "m_window", .factor_model, 
                     "factor_model", .datafreq, "data", sep = "_")
   
-  out1 <- out2 <- out3 <- list()
+  if (isTRUE(verbose)) {message(paste0("Model: ", model_name, "."))}
+  
+  out1 <- out2 <- out3 <- out4 <- out5 <- list()
 
   for (i in seq_along(dates$id_date)) {
     
@@ -69,7 +71,7 @@ f_process_model <- function(.df, .factor_df, .factor_model, .id, .date, .model,
     ret_mat <- f_ret_mat(.df, .id, dates$id_date[i], dates$start_date[i], dates$end_date[i])
     factor_mat <- f_factor_mat(.factor_df, dates$start_date[i], dates$end_date[i])
     alpha_screen <- PeerPerformance::alphaScreening(ret_mat, factors = factor_mat, control = .control)
-
+    
     # Alpha Correlations
     alpha_cor <- f_alpha_cor(ret_mat, factor_mat, dates$id_date[i], .method = .method)
     
@@ -77,19 +79,26 @@ f_process_model <- function(.df, .factor_df, .factor_model, .id, .date, .model,
     tbl_screening <- f_tbl_screening(alpha_screen, .bucket)
     
     # Create Screening Plot
-    fig_title <- paste(folder_name, deparse(substitute(.id)), dates$id_date[i], sep = "_")
-    f_screenplot(tbl_screening, fig_title, folder_name, .datafreq)
+    fig_title <- paste(model_name, deparse(substitute(.id)), dates$id_date[i], sep = "_")
+    f_screenplot(tbl_screening, fig_title, .datafreq)
+    
+    # Port permno
+    port_permno <- f_port_permno(alpha_screen, .id, dates$id_date[i])
+    
+    # Port return
+    # port_ret <- f_port_ret(.df, port_permno)
     
     out1 <- append(out1, list(alpha_screen))
     out2 <- append(out2, list(alpha_cor))
     out3 <- append(out3, list(tbl_screening))
-    
+    out4 <- append(out4, list(port_permno))
+    # out5 <- append(out5, list(port_ret))
   }
   
   if (isTRUE(verbose)) {message("Completed!")}
-  names(out1) <- names(out2) <- names(out3) <- dates$id_date
-  results <- tibble(out1, out2, out3, dates$id_date) %>% 
-    `colnames<-`(c("alpha_screen", "alpha_cor", "tbl_screening", "id_date"))
+  names(out1) <- names(out2) <- names(out3) <- names(out4) <- names(out5) <- dates$id_date
+  results <- tibble(out1, out2, out3, out4, out5, dates$id_date) %>% 
+    `colnames<-`(c("alpha_screen", "alpha_cor", "tbl_screening", "port_permno", "port_ret", "id_date"))
 
 }
 
@@ -109,6 +118,8 @@ results <- f_process_model(sp_df,
 
 source(here::here("function", "screening_funs_V2.R"))
 
+# Results -----------------------------------------------------------------
+
 f_tidy_results <- function(.results) {
   tidy_n_obs     <- f_tidy_n_obs(.results$alpha_screen, .results$id_date)
   tidy_alpha_cor <- f_tidy_alpha_cor(.results$alpha_cor)
@@ -119,89 +130,192 @@ f_tidy_results <- function(.results) {
 
 tidy_results <- f_tidy_results(results)
 
-# 
-# f_plot_results <- function(.tidy_results, .model_name) {
-#   f_plot_hist_obs(.tidy_results$tidy_n_obs, .model_name)
-#   f_plot_hist_cor(.tidy_results$tidy_alpha_cor, .model_name)
-# }
+# Plot results ------------------------------------------------------------
 
-# f_plot_results(tidy_results, "model_name")
+f_plot_results <- function(.tidy_results, .model_name) {
+  p1 <- f_plot_line_pi(tidy_results$tidy_screening, .model_name)
+  p2 <- f_plot_hist_obs(.tidy_results$tidy_n_obs, .model_name)
+  p3 <- f_plot_hist_cor(.tidy_results$tidy_alpha_cor, .model_name)
+  list(p1, p2, p3)
+}
 
+plots <- f_plot_results(tidy_results, "test")
+walk(plots, print)
 
+f_plot_line_pi(tidy_results$tidy_screening, "test")
 f_plot_hist_obs(tidy_results$tidy_n_obs, "test")
 f_plot_hist_cor(tidy_results$tidy_alpha_cor, "test")
 
-
-
-
-
 # Portfolio Analysis ------------------------------------------------------
 
+f_port_permno <- function(.alpha_screen, .id, .id_date) {
+  eval_expr <- compose(eval, parse)
+  id_string <- paste0(".id$'", .id_date,"'")
+  id_expr   <- eval_expr(text = id_string)
+  id_vec    <- id_expr %>% as_tibble() %>% filter(!is.na(.)) %>% unlist()
+  
+  permno <- .alpha_screen %>%
+    as_tibble() %>%
+    select(pipos, pineg) %>% 
+    mutate(permno = id_vec)
+  
+  top_10    <- permno %>% slice_max(pipos, n = 10)
+  bottom_10 <- permno %>% slice_max(pineg, n = 10)
+  benchmark <- permno %>% filter(!permno %in% c(top_10$permno, bottom_10$permno))
+  list(top_10$permno, bottom_10$permno, benchmark$permno) %>% 
+    `names<-`(c("top_10", "bottom_10", "benchmark"))
+}
+
+options(dplyr.summarise.inform = FALSE)
+
+results$port_permno$`2009 Q4`$top_10
+
+
+source(here::here("function", "screening_funs_V2.R"))
+
+
+f_port_ret <- function(.df, .port_permno) {
+  
+  port_ret <- function(.df, .permno, .port_name) {
+    .df %>% 
+      filter(permno %in% .permno) %>%
+      group_by(date) %>%
+      summarize(ret = mean(ret_rf, na.rm = TRUE), port = .port_name) %>% 
+      mutate(cumul_ret = cumprod(ret + 1))
+  }
+  
+  top_10_ret    <- .df %>% port_ret(.port_permno$top_10, "top_10")
+  bottom_10_ret <- .df %>% port_ret(.port_permno$bottom_10, "bottom_10")
+  benchmark_ret <- .df %>% port_ret(.port_permno$benchmark, "benchmark")
+  list(top_10_ret, bottom_10_ret, benchmark_ret) %>% 
+    `names<-`(c("top_10", "bottom_10", "benchmark"))
+}
+
+
+results$port_ret$`2009 Q4`$top_10
+
+
+port_ret <- function(.df, .port_name, .permno) {
+  .df %>% 
+    filter(permno %in% .permno$permno) %>%
+    group_by(date) %>%
+    summarize(ret = mean(ret_rf, na.rm = TRUE), port = .port_name) %>% 
+    mutate(cumul_ret = cumprod(ret + 1))
+}
+
+port_ret(sp_df, "top_10", id_top_10)
+
+
+
+top_10_ret <- sp_df %>% 
+  filter(permno %in% id_top_10$permno) %>%
+  group_by(date) %>%
+  summarize(ret = mean(ret_rf, na.rm = TRUE), port = "top_10") %>% 
+  mutate(performance = cumprod(ret + 1))
+
+
+bottom_10_ret <- sp_df %>% 
+  filter(permno %in% id_bottom_10$permno) %>%
+  group_by(date) %>%
+  summarize(ret = mean(ret_rf, na.rm = TRUE), port = "bottom_10") %>% 
+  mutate(performance = cumprod(ret + 1))
+
+benchmark_ret <- sp_df %>% 
+  filter(permno %in% id_benchmark$permno) %>%
+  group_by(date) %>%
+  summarize(ret = mean(ret_rf, na.rm = TRUE), port = "benchmark") %>% 
+  mutate(performance = cumprod(ret + 1))
 
 
 
 
+results$port_permno %>% 
+  map("top_10") %>% 
+  bind_rows() %>% View()
 
-tidy_pi_result %>% 
-  mutate(date = as.yearqtr(date)) %>%
-  filter(name == "pipos") %>% 
-ggplot(aes(date, value)) +
+
+
+id_top_10_ret %>% 
+  bind_rows(id_bottom_10_ret) %>% 
+  bind_rows(id_benchmark_ret) %>% 
+  ggplot(aes(date, performance, color = port)) +
   geom_line() +
-  scale_x_yearqtr() +
+  scale_y_continuous(labels = percent)
+
+id_top_10_ret %>% 
+  ggplot(aes(ret)) + 
+  geom_histogram() +
+  scale_x_continuous(labels = percent)
+
+id_benchmark_ret %>%
+  mutate(ret = (ret * 100)) %>% 
+  descr() %>% tb()
+
+library(PerformanceAnalytics)
+
+id_benchmark_ret %>%
+  mutate(ret = (ret * 100)) %>% 
+  select(ret) %>% 
+  table.DownsideRisk
+
+
+id_benchmark_ret %>%
+  select(date, ret) %>% 
+  as.xts(order.by = .$date) %>%
+  select(ret)
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  table.DownsideRisk()
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  SharpeRatio()
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  table.Stats()
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  chart.Histogram()
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  chart.CumReturns()
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  chart.QQPlot()
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  charts.PerformanceSummary()
+
+xts(id_benchmark_ret$ret, id_benchmark_ret$date) %>% 
+  charts.RollingPerformance()
+
+xts(id_top_10_ret$ret, id_benchmark_ret$date) %>% 
+  VaR()
+
+tidy_results$tidy_screening %>% 
+ggplot(aes(date, value, color = name)) +
+  geom_line() +
+  scale_x_yearqtr(format = "%Y-Q%q") +
   labs(title = paste0("Mean Out/Under-Performance Ratios using ",params$window, "-months rolling window."),
-       subtitle = paste0("Backward-looking and forward-looking for Green and Brown firms using ", "fctr_flag"),
        x = "Date",
-       y = "Percent") +
+       y = "Percent",
+       color = "Pi Ratios") +
   scale_y_continuous(labels = percent)
 
 
+tidy_results$tidy_n_obs %>% 
+  filter(!is.na(obs)) %>%
+  ggplot(aes(obs)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~ factor(date)) +
+  labs(title = paste0("Concordant observations."))
 
-
-
-
-f_obs_hist <- function(.tidy_n_obs, .model_name){
-  .tidy_n_obs %>% 
-    filter(!is.na(obs)) %>%
-    ggplot(aes(obs)) +
-    geom_histogram(bins = 30) +
-    facet_wrap(~date) +
-    labs(title = paste0("Concordant observations for ", .model_name))
-}
-
-f_obs_hist(tidy_n_obs, "model_name")
-
-
-
-  
-f_alpha_cor_hist <- function(.tidy_alpha_cor, .model_name)  {
-  .tidy_alpha_cor %>% 
-    ggplot(aes(value)) +
-    geom_histogram(bins = 30) +
-    facet_wrap(~date) +
-    geom_vline(xintercept = -0.3, lty = "dashed") +
-    geom_vline(xintercept = 0.3, lty = "dashed") + 
-    labs(title = paste0("Correlations of alphas for ", .model_name))
-}
-
-f_alpha_cor_hist(tidy_alpha_cor, "model_name")
-
-
-
-
-
-
-f_plot_hist_cor <- function(df, name) {
-  {{ df }} %>% 
-    bind_rows() %>% 
-    mutate(date = as.Date.yearqtr(date)) %>%
-    select(date, correlation) %>% 
-    pivot_longer(-date) %>% 
-    filter(!is.na(value)) %>%
-    ggplot(aes(value)) +
-    geom_histogram(bins = 30) +
-    facet_wrap(~date) +
-    labs(title = paste0("Correlations of alphas for ", {{ name }}))
-}
+tidy_results$tidy_alpha_cor %>% 
+  ggplot(aes(value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~ factor(date)) +
+  geom_vline(xintercept = -0.3, lty = "dashed") +
+  geom_vline(xintercept = 0.3, lty = "dashed") + 
+  labs(title = paste0("Correlations of alphas"))
 
 
 
@@ -211,34 +325,6 @@ f_plot_hist_cor <- function(df, name) {
 
 
 
-
-
-
-date_zoo <- ghg_df %>% select(date) %>% distinct() %>% pluck()
-
-dates_bw <- date_zoo %>% f_create_dates(.model = "bw", params$window, params$datafreq)
-
-ret_mat2 <- sp_df %>%
-  filter(permno %in% ghg_id$green$`2011 Q4`) %>%
-  filter(date >= "2009-01-01",
-         date <= "2011-12-01") %>%
-  select(date, permno, ret_rf) %>%
-  pivot_wider(names_from = permno, values_from = ret_rf) %>%
-  janitor::remove_empty(which = "cols") %>%
-  select(-date) %>%
-  as.matrix()
-
-
-  f_ret_mat(sp_df, ghg_id$green, "2011 q4", "2009-01-01", "2011-12-01")
-factor_mat2 <- f_factor_mat(factor_df, "2009-01-01", "2011-12-01")
-
-
-alpha_screen <- PeerPerformance::alphaScreening(ret_mat2, factors = factor_mat2, control = params$control)
-
-test <- f_tbl_screening(alpha_screen, 5)
-
-attr(test)
-f_screenplot(test, 0, 0, "monthly")
 
 
 
