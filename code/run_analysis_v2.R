@@ -86,13 +86,14 @@ f_process_model <- function(.df, .factor_df, .factor_model, .id, .date, .model,
     port_permno <- f_port_permno(alpha_screen, .id, dates$id_date[i])
     
     # Port return
-    # port_ret <- f_port_ret(.df, port_permno)
+    port_ret <- f_port_ret(.df, port_permno, dates$id_date[i], .datafreq)
+    
     
     out1 <- append(out1, list(alpha_screen))
     out2 <- append(out2, list(alpha_cor))
     out3 <- append(out3, list(tbl_screening))
     out4 <- append(out4, list(port_permno))
-    # out5 <- append(out5, list(port_ret))
+    out5 <- append(out5, list(port_ret))
   }
   
   if (isTRUE(verbose)) {message("Completed!")}
@@ -148,108 +149,23 @@ f_plot_hist_cor(tidy_results$tidy_alpha_cor, "test")
 
 # Portfolio Analysis ------------------------------------------------------
 
-f_port_permno <- function(.alpha_screen, .id, .id_date) {
-  eval_expr <- compose(eval, parse)
-  id_string <- paste0(".id$'", .id_date,"'")
-  id_expr   <- eval_expr(text = id_string)
-  id_vec    <- id_expr %>% as_tibble() %>% filter(!is.na(.)) %>% unlist()
-  
-  permno <- .alpha_screen %>%
-    as_tibble() %>%
-    select(pipos, pineg) %>% 
-    mutate(permno = id_vec)
-  
-  top_10    <- permno %>% slice_max(pipos, n = 10)
-  bottom_10 <- permno %>% slice_max(pineg, n = 10)
-  benchmark <- permno %>% filter(!permno %in% c(top_10$permno, bottom_10$permno))
-  list(top_10$permno, bottom_10$permno, benchmark$permno) %>% 
-    `names<-`(c("top_10", "bottom_10", "benchmark"))
-}
-
-options(dplyr.summarise.inform = FALSE)
-
 results$port_permno$`2009 Q4`$top_10
 
+results$port_ret %>%  map("top_10") %>% bind_rows()
+results$port_ret %>%  map("bottom_10") %>% bind_rows()
+results$port_ret %>%  map("benchmark_10") %>% bind_rows()
 
-source(here::here("function", "screening_funs_V2.R"))
-
-
-f_port_ret <- function(.df, .port_permno) {
-  
-  port_ret <- function(.df, .permno, .port_name) {
-    .df %>% 
-      filter(permno %in% .permno) %>%
-      group_by(date) %>%
-      summarize(ret = mean(ret_rf, na.rm = TRUE), port = .port_name) %>% 
-      mutate(cumul_ret = cumprod(ret + 1))
-  }
-  
-  top_10_ret    <- .df %>% port_ret(.port_permno$top_10, "top_10")
-  bottom_10_ret <- .df %>% port_ret(.port_permno$bottom_10, "bottom_10")
-  benchmark_ret <- .df %>% port_ret(.port_permno$benchmark, "benchmark")
-  list(top_10_ret, bottom_10_ret, benchmark_ret) %>% 
-    `names<-`(c("top_10", "bottom_10", "benchmark"))
-}
-
-
-results$port_ret$`2009 Q4`$top_10
-
-
-port_ret <- function(.df, .port_name, .permno) {
-  .df %>% 
-    filter(permno %in% .permno$permno) %>%
-    group_by(date) %>%
-    summarize(ret = mean(ret_rf, na.rm = TRUE), port = .port_name) %>% 
-    mutate(cumul_ret = cumprod(ret + 1))
-}
-
-port_ret(sp_df, "top_10", id_top_10)
-
-
-
-top_10_ret <- sp_df %>% 
-  filter(permno %in% id_top_10$permno) %>%
-  group_by(date) %>%
-  summarize(ret = mean(ret_rf, na.rm = TRUE), port = "top_10") %>% 
-  mutate(performance = cumprod(ret + 1))
-
-
-bottom_10_ret <- sp_df %>% 
-  filter(permno %in% id_bottom_10$permno) %>%
-  group_by(date) %>%
-  summarize(ret = mean(ret_rf, na.rm = TRUE), port = "bottom_10") %>% 
-  mutate(performance = cumprod(ret + 1))
-
-benchmark_ret <- sp_df %>% 
-  filter(permno %in% id_benchmark$permno) %>%
-  group_by(date) %>%
-  summarize(ret = mean(ret_rf, na.rm = TRUE), port = "benchmark") %>% 
-  mutate(performance = cumprod(ret + 1))
+results$port_ret %>% 
+  map(bind_rows) %>% 
+  bind_rows %>% 
+  group_by(port) %>% 
+  mutate(perf = cumprod(1 + ret)) %>% 
+  ggplot(aes(date, perf, color = port)) +
+  geom_line()
 
 
 
 
-results$port_permno %>% 
-  map("top_10") %>% 
-  bind_rows() %>% View()
-
-
-
-id_top_10_ret %>% 
-  bind_rows(id_bottom_10_ret) %>% 
-  bind_rows(id_benchmark_ret) %>% 
-  ggplot(aes(date, performance, color = port)) +
-  geom_line() +
-  scale_y_continuous(labels = percent)
-
-id_top_10_ret %>% 
-  ggplot(aes(ret)) + 
-  geom_histogram() +
-  scale_x_continuous(labels = percent)
-
-id_benchmark_ret %>%
-  mutate(ret = (ret * 100)) %>% 
-  descr() %>% tb()
 
 library(PerformanceAnalytics)
 

@@ -25,6 +25,7 @@ shhh(require(lubridate))               # Date management
 # 17. f_plot_line_pi:    Plot line plot of pi ratios
 
 # 18. f_port_permno:     Create list of permno for portfolio
+# 19. f_port_ret:        Calculate returns with rebalancing
 
 # -------------------------------------------------------------------------
 
@@ -156,7 +157,7 @@ f_create_dates <- compiler::cmpfun(.f_create_dates)
     select(-date) %>%
     as.matrix()
   
-  return(list(ret_mat, id_vec))
+  return(ret_mat)
 }
 f_ret_mat <- compiler::cmpfun(.f_ret_mat)
 
@@ -390,3 +391,36 @@ f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
     `names<-`(c("top_10", "bottom_10", "benchmark"))
 }
 f_port_permno <- compiler::cmpfun(.f_port_permno)
+
+# -------------------------------------------------------------------------
+
+.f_port_ret <- function(.df, .port_permno, .id_date, .datafreq) {
+  
+  date_yqtr <- compose(as.Date.yearqtr, as.yearqtr)
+  date_ymon <- compose(as.Date.yearmon, as.yearmon)
+  
+  port_ret <- function(.df, .permno, .id_date, .datafreq, .port_name) {
+    test <- .df %>%
+      filter(if (.datafreq == "monthly") {
+        between(date, date_yqtr(.id_date) %m+% months(3),
+                date_yqtr(.id_date) %m+% months(5))
+      } else {
+        between(date, date_ymon(.id_date) %m+% months(1),
+                date_ymon(.id_date) %m+% months(2) %m-% days(1))
+      }) %>% 
+      filter(permno %in% .permno) %>%
+      group_by(date) %>%
+      summarize(ret = mean(ret_rf, na.rm = TRUE),
+                port = .port_name,
+                period = .id_date)
+  }
+  
+  top_10_ret    <- .df %>% port_ret(.port_permno$top_10, .id_date, .datafreq, "top_10")
+  bottom_10_ret <- .df %>% port_ret(.port_permno$bottom_10, .id_date, .datafreq, "bottom_10")
+  benchmark_ret <- .df %>% port_ret(.port_permno$benchmark, .id_date, .datafreq, "benchmark")
+  list(top_10_ret, bottom_10_ret, benchmark_ret) %>% 
+    `names<-`(c("top_10", "bottom_10", "benchmark"))
+}
+
+f_port_ret <- compiler::cmpfun(.f_port_ret)
+
