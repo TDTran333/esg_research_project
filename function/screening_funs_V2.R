@@ -13,11 +13,14 @@ shhh(require(lubridate))               # Date management
 # 8. f_alpha_cor:        Alpha correlations
 # 9. f_tbl_screening:    Summary table of probability ratios
 # 10. f_screenplot:      Create screenplot
-# 11. f_tidy_pi_result:  Create tidy df of pi results for plotting
 
-# 13. f_tidy_n_obs:      Create tidy df of concordant obs for plotting
-# 14. f_plot_hist_obs:   Plot histograms of concordant obs
-# 15. f_tidy_alpha_cor:  Create tidy df of alpha cor plotting
+# f_main_procoess:       Runs the previous 10 functions.
+
+# 11. f_tidy_screening:  Create tidy df of pi results for plotting
+# 12. f_tidy_n_obs:      Create tidy df of concordant obs for plotting
+# 13. f_tidy_alpha_cor:  Create tidy df of alpha cor plotting
+# 14. f_tidy_results:    Regroup the previous 3 functions
+# 15. f_plot_hist_obs:   Plot histograms of concordant obs
 # 16. f_plot_hist_cor:   Plot histograms of alpha cor
 
 # -------------------------------------------------------------------------
@@ -27,6 +30,7 @@ shhh(require(lubridate))               # Date management
   .esg_var <- match.arg(.esg_var, c("ghg", "envscore"))
   .datafreq <- match.arg(.datafreq,  c("monthly", "dly"))
   
+  mean_na_rm <- partial(mean, na.rm = TRUE)
   quantile_na_rm <- partial(quantile, na.rm =  TRUE)
 
   .df %>%
@@ -40,7 +44,7 @@ shhh(require(lubridate))               # Date management
                                 width = if(.datafreq == "monthly") {
                                   .window / 3}
                                 else {.window},
-                                FUN = function(x) mean(x, na.rm = TRUE),
+                                FUN = mean_na_rm,
                                 fill = NA,
                                 partial = TRUE,
                                 align = "right")) %>%
@@ -232,11 +236,11 @@ f_tbl_screening <- compiler::cmpfun(.f_tbl_screening)
 
 # -------------------------------------------------------------------------
 
-.f_screenplot <- function(.df, .fig_title, .folder_name, .datafreq) {
+.f_screenplot <- function(.df, .fig_title, .model_name, .datafreq) {
   
-  dir <- here::here("output", "figures", .folder_name)
+  dir <- here::here("output", "figures", .model_name)
   ifelse(!dir.exists(file.path(dir)), dir.create(file.path(dir)), FALSE)
-  png(file = here::here(dir, paste0("fig_screenplot_", .fig_title, ".png")), width = 700, height = 700)
+  png(here::here(dir, paste0("fig_screenplot_", .fig_title, ".png")), width = 700, height = 700)
   
   mult <- if(.datafreq == "monthly") 12 else 252
   
@@ -269,7 +273,13 @@ f_screenplot <- compiler::cmpfun(.f_screenplot)
 
 # -------------------------------------------------------------------------
 
-.f_tidy_pi_result <- function(.tbl_screening, .id_date, .model_name) {
+.f_tidy_screening <- function(.tbl_screening, .id_date) {
+  mean_pi <- function(.tbl_screening) {
+    .tbl_screening %>%
+      summarize(mean_pipos = mean(pipos, na.rm = TRUE),
+                mean_pineg = mean(pineg, na.rm = TRUE))
+  }
+  
   .tbl_screening %>%
     map(mean_pi) %>%
     transpose() %>%
@@ -279,10 +289,9 @@ f_screenplot <- compiler::cmpfun(.f_screenplot)
     `colnames<-`(c("pipos", "pineg")) %>%
     as_tibble() %>% 
     mutate(date = .id_date) %>%
-    mutate(model = {{ .model_name }}) %>% 
-    pivot_longer(-c(date, model))
+    pivot_longer(-date)
 }
-f_tidy_pi_result <- compiler::cmpfun(.f_tidy_pi_result)
+f_tidy_screening <- compiler::cmpfun(.f_tidy_screening)
 
 # -------------------------------------------------------------------------
 
@@ -312,7 +321,6 @@ f_plot_hist_obs <- compiler::cmpfun(.f_plot_hist_obs)
 .f_tidy_alpha_cor <- function(.alpha_cor) {
   .alpha_cor %>%
     bind_rows() %>% 
-    mutate(date = factor(date)) %>%
     select(date, correlation) %>% 
     pivot_longer(-date) %>% 
     filter(!is.na(value))
@@ -335,6 +343,14 @@ f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
 
 # -------------------------------------------------------------------------
 
+.f_tidy_results <- function(.results) {
+  tidy_n_obs     <- f_tidy_n_obs(.results$alpha_screen, .results$id_date)
+  tidy_alpha_cor <- f_tidy_alpha_cor(.results$alpha_cor)
+  tidy_screening <- f_tidy_screening(.results$tbl_screening, .results$id_date)
+  tidy_results   <- list(tidy_n_obs, tidy_alpha_cor, tidy_screening) %>% 
+    `names<-`(c("tidy_n_obs", "tidy_alpha_cor", "tidy_screening"))
+}
+f_tidy_results <- compiler::cmpfun(.f_tidy_results)
 
 # -------------------------------------------------------------------------
 
