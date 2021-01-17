@@ -223,53 +223,50 @@ env_port <- map2_df(map(env_results[1:3], "port_ret"), model_names[1:3], ~mutate
 
 port_dates <- ghg_port %>% filter(model_name == "Green Bw") %>% select(date)
 
+f_port_chart <- function(.port, .port_type) {
+  
+  title <- paste0(deparse(substitute(.port)), "_", .port_type)
+
+  png(filename = here::here("output", "figures", paste0(title, "_chart.png")), width = 700, height = 700, units = "px")
+  port_wide <- .port %>% 
+    filter(model_name == "Green Bw") %>% 
+    pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
+  port_xts <- xts(port_wide[, -1], order.by = port_wide$date)
+  port_xts %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft", plot.engine = "ggplot2")
+
+  # alpha_cor_name <- paste(.esg_name, .model_name, params$window, "m", params$datafreq, "data", 
+  #                         params$factor, "factor_model_alpha_cor.png", sep = "_")
+  # ggsave(p, filename = here("Output", "figures", alpha_cor_name), width = 8, height = 8, dpi = 150)
+  
+  return(port_xts)
+}
+
+f_port_chart(ghg_port, "Green Bw")
+
+
 png(filename = here::here("output", "figures", "ghg_green_port_chart.png"), width = 700, height = 700, units = "px")
 ghg_green_port <- ghg_port %>% 
   filter(model_name == "Green Bw") %>% 
   pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
 ghg_green_port <- xts(ghg_green_port[, -1], order.by = port_dates$date)
-ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft")
-dev.off()
+ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft", plot.engine = "ggplot2")
 
-ghg_brown_port <- ghg_port %>% 
-  filter(model_name == "Brown Bw") %>% 
-  pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
-ghg_brown_port <- xts(ghg_brown_port[, -1], order.by = port_dates$date)
-ghg_brown_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft")
+f_port_stats <- function(.port_xts, .port_type) {
 
-ghg_neutral_port <- ghg_port %>% 
-  filter(model_name == "Neutral Bw") %>% 
-  pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% 
-  select(-period) %>% 
-  clean_names()
-ghg_neutral_port <- xts(ghg_neutral_port[, -1], order.by = port_dates$date)
-ghg_neutral_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft")
-
-ghg_green_port %>% table.Stats()
-ghg_green_port %>% SharpeRatio()
-ghg_green_port %>% table.DownsideRisk()
-ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
-
-ghg_green_port %>% table.Stats()
-ghg_green_port %>% SharpeRatio()
-ghg_green_port %>% table.DownsideRisk()
-ghg_green_port %>% chart.Histogram()
-ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
-ghg_green_port %>% chart.QQPlot()
-ghg_green_port %>% charts.PerformanceSummary()
-ghg_green_port %>% charts.RollingPerformance()
-ghg_green_port %>% VaR()
-
-ghg_green_port %>% table.Stats()
-ghg_green_port %>% SharpeRatio()
-ghg_green_port %>% table.DownsideRisk()
-ghg_green_port %>% chart.Histogram()
-ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
-ghg_green_port %>% chart.QQPlot()
-ghg_green_port %>% charts.PerformanceSummary()
-ghg_green_port %>% charts.RollingPerformance()
-ghg_green_port %>% VaR()
-
+  filename <- paste0(deparse(substitute(.port_xts)), "_", .port_type)
+  stats <- .port_xts %>% table.Stats() 
+  stats %>% write.csv(file = here("output", paste0(filename, "_stats.csv")))
+  sharpe <- .port_xts %>% SharpeRatio() 
+  sharpe %>% write.csv(file = here("output", paste0(filename, "_sharpe.csv")))
+  downsiderisk <- .port_xts %>% table.DownsideRisk() 
+  downsiderisk %>% write.csv(file = here("output", paste0(filename, "_downside_risk.csv")))
+  
+}
+  
+f_port_stats(ghg_green_port, "Green Bw")
+  
+  
+  
 
 
 
