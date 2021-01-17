@@ -20,12 +20,14 @@ shhh(require(lubridate))               # Date management
 # 12. f_tidy_n_obs:      Create tidy df of concordant obs for plotting
 # 13. f_tidy_alpha_cor:  Create tidy df of alpha cor plotting
 
-# 15. f_plot_hist_obs:   Plot histograms of concordant obs
+# 14. f_plot_obs:        Plot histograms of concordant obs
+# 14. f_missing_obs:     Descriptive stats of missing obs
 # 16. f_plot_hist_cor:   Plot histograms of alpha cor
-# 17. f_plot_line_pi:    Plot line plot of pi ratios
+# 17. f_significant_cor: Percent significant cor
+# 18. f_plot_ratios:     Plot line plot of pi ratios
 
-# 18. f_port_permno:     Create list of permno for portfolio
-# 19. f_port_ret:        Calculate returns with rebalancing
+# 19. f_port_permno:     Create list of permno for portfolio
+# 20. f_port_ret:        Calculate returns with rebalancing
 
 # -------------------------------------------------------------------------
 
@@ -319,23 +321,105 @@ f_tidy_alpha_cor <- compiler::cmpfun(.f_tidy_alpha_cor)
 
 # -------------------------------------------------------------------------
 
-.f_plot_hist_cor <- function(.tidy_alpha_cor, .model_name)  {
-  p <- .tidy_alpha_cor %>% 
+.f_plot_obs <- function(.obs_df) {
+  p <- .obs_df %>% 
+    filter(!is.na(obs)) %>%
+    group_by(model_name, date) %>%
+    mutate(pct = obs / max(obs)) %>% 
+    summarize(average = mean(pct)) %>%
+    ggplot(aes(average)) +
+    geom_histogram(bins = 10) +
+    facet_wrap(~ model_name, scale = "free", ncol = 3, dir = "v") +
+    labs(title = paste0("Percent Concordant Observations for ", deparse(substitute(.obs_df)), ".")) + 
+    scale_x_continuous(labels = percent)
+  
+  obs_name <- paste(deparse(substitute(.obs_df)), params$window, "m", 
+                    params$datafreq, "data", params$factor, "factor_model_missing_obs.png", sep = "_")
+  ggsave(here("Output", "figures", obs_name), width = 10, height = 8, dpi = 150)
+  
+  return(p)
+}
+f_plot_obs <- compiler::cmpfun(.f_plot_obs)
+
+# -------------------------------------------------------------------------
+
+.f_missing_obs <- function(.obs_df) {
+  out <- .obs_df %>% 
+    filter(!is.na(obs)) %>%
+    group_by(model_name, date) %>%
+    summarize(n_obs = n(),
+              avg_obs = mean(obs),
+              missing_obs = mean(obs < max(obs)) * n_obs,
+              pct_missing_obs = (missing_obs / n_obs) * 100) %>%
+    descr() 
+  
+  return(out)
+}
+f_missing_obs <- compiler::cmpfun(.f_missing_obs)
+
+# -------------------------------------------------------------------------
+
+.f_plot_hist_cor <- function(.alpha_cor, .model_name, .esg_name)  {
+  p <- .alpha_cor %>% 
     ggplot(aes(value)) +
     geom_histogram(bins = 30) +
     facet_wrap(~ factor(date)) +
     geom_vline(xintercept = -0.3, lty = "dashed") +
     geom_vline(xintercept = 0.3, lty = "dashed") + 
-    labs(title = paste0("Correlations of Alphas For ", .model_name, "."),
+    labs(title = paste0("Correlations of Alphas for ", .model_name, " from ", .esg_name, "."),
          subtitle = "Dashed lines correspond to -0.3 and +0.3")
   
-  alpha_cor_name <- paste(.model_name, params$window, "m", params$datafreq, "data", 
+  alpha_cor_name <- paste(.esg_name, .model_name, params$window, "m", params$datafreq, "data", 
                           params$factor, "factor_model_alpha_cor.png", sep = "_")
   ggsave(p, filename = here("Output", "figures", alpha_cor_name), width = 8, height = 8, dpi = 150)
   
   return(p)
 }
 f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
+
+# -------------------------------------------------------------------------
+
+.f_significant_cor <- function(.alpha_cor) {
+  .alpha_cor %>%
+    group_by(model_name, date) %>% 
+    summarize(n_obs_below_0_3 = sum(value < -0.3),
+              n_obs_above_0_3 = sum(value > 0.3),
+              n_obs = n(),
+              pct_n_obs_below_0_3 = n_obs_below_0_3 / n_obs,
+              pct_n_obs_above_0_3 = n_obs_above_0_3 / n_obs) %>%
+    group_by(model_name) %>% 
+    summarize(across(-date, mean))
+}
+f_significant_cor <- compiler::cmpfun(.f_significant_cor)
+
+# -------------------------------------------------------------------------
+
+.f_plot_ratios <- function(.screening_df){
+  
+  title <- paste0("Mean Out/Under-Performance Ratios Using ", 
+                  params$window, "-Month Rolling Window based on ", 
+                  deparse(substitute(.screening_df)), ".")
+  
+  p <- .screening_df %>%
+    ggplot(aes(date, value, color = name)) +
+    geom_line(size = 1.5) +
+    facet_wrap(~ model_name, ncol = 2, dir = "h", scale = "free_x") +
+    labs(title = title,
+         subtitle = paste0("Backward-Looking and Forward-Looking for Green, Brown and Neutral Firms Using ",
+                           params$factor, "-factor model."),
+         x = "Date",
+         y = "Percent",
+         color = "Ratios") +
+    scale_y_continuous(labels = percent) +
+    scale_x_yearqtr(format = "%Y-Q%q")
+  
+  screening_name <- paste(deparse(substitute(.screening_df)), params$window, "m", params$datafreq, "data", 
+                          params$factor, "factor_model.png", sep = "_")
+  ggsave(p, filename = here("Output", "figures", screening_name), width = 10, height = 8, dpi = 150)
+  
+  return(p)
+}
+f_plot_ratios <- compiler::cmpfun(.f_plot_ratios)
 
 # -------------------------------------------------------------------------
 

@@ -126,7 +126,7 @@ f_run_model <- partial(f_process_model,
                        .df           = sp_df,
                        .factor       = factor_df,
                        .factor_model = params$factor,
-                       .date         = date_col[1:20, ],
+                       .date         = date_col,
                        .datafreq     = params$datafreq,
                        .run_cor      = if(params$datafreq == "daily") {FALSE} else {TRUE},
                        .method       = "pearson",
@@ -152,144 +152,123 @@ env_results[paste0(esg_group, "_fw")] <- map(esg_group, ~f_run_model(.id = ghg_i
                                                                      .model = "fw",
                                                                      .run_port = FALSE))
 
-port <- map(ghg_results2, "port_ret") %>% map_df(~pivot_wider(., names_from = port, values_from = ret))
-
-port2 <- map2_df(map(ghg_results2, "port_ret"), model_names[4:6], ~mutate(.x, model_name = .y)) %>% 
-  pivot_wider(., names_from = port, values_from = ret)
-
-test$green_bw$port_ret %>% 
-  map_dfr(~bind_rows(.x)) %>% 
-  mutate(model_name = "green_bw") %>%
-  spread(port, ret)
-
 glimpse(ghg_results)
 glimpse(env_results)
 
-ghg_results %>% saveRDS(file = here("output", "monthly_ghg_results3.Rds"))
-env_results %>% saveRDS(file = here("output", "monthly_env_results.Rds"))
-
-test <- readRDS(here("output", "monthly_ghg_results.Rds"))
-test2 <- readRDS(here("output", "monthly_env_results.Rds"))
-
-ghg_results %>% object.size()
-env_results$green_bw$port_ret %>% object.size()
+# ghg_results %>% saveRDS(file = here("output", "monthly_ghg_3f_results.Rds"))
+# env_results %>% saveRDS(file = here("output", "monthly_env_3f_results.Rds"))
+# ghg_results %>% saveRDS(file = here("output", "monthly_ghg_6f_results.Rds"))
+# env_results %>% saveRDS(file = here("output", "monthly_env_6f_results.Rds"))
+# ghg_results %>% saveRDS(file = here("output", "daily_ghg_3f_results.Rds"))
+# env_results %>% saveRDS(file = here("output", "daily_env_3f_results.Rds"))
+# ghg_results %>% saveRDS(file = here("output", "daily_ghg_6f_results.Rds"))
+# env_results %>% saveRDS(file = here("output", "daily_env_6f_results.Rds"))
 
 source(here::here("function", "screening_funs_V2.R"))
 
+# ghg_results <- readRDS(here("output", "monthly_ghg_6f_results.Rds"))
+# env_results <- readRDS(here("output", "monthly_env_6f_results.Rds"))
+
 # Plotting Results -----------------------------------------------------------------
 
-model_names <- str_to_title(gsub("_", " ", names(test)))
+st_options(round.digits = 4, style = "rmarkdown", plain.ascii = FALSE)
 
-ghg_screening <- map2_df(map(test, "screening"), model_names, ~mutate(.x, model_name = .y))
-env_screening <- map2_df(map(test2, "n_obs"), model_names, ~mutate(.x, model_name = .y))
+# Plot Obs ----------------------------------------------------------------
 
-ghg_screening %>%
-  mutate(model_name = fct_relevel(model_name, c(paste0(esg_group, "_bw"), paste0(esg_group, "_fw")))) %>% 
-  ggplot(aes(date, value, color = name)) +
-  geom_line(size = 1.5) +
-  facet_wrap(~ model_name, ncol = 2, dir = "v", scale = "free_x") +
-  labs(title = paste0("Mean Out/Under-Performance Ratios Using ",params$window, "-Month Rolling Window."),
-       subtitle = paste0("Backward-looking and forward-looking for Green, Brown and Neutral firms using ",
-                         params$factor, "-factor model."),
-       x = "Date",
-       y = "Percent",
-       color = "Ratios") +
-  scale_y_continuous(labels = percent) +
-  scale_x_yearqtr(format = "%Y-Q%q")
+model_names <- str_to_title(gsub("_", " ", names(ghg_results)))
 
-screening_name <- paste(params$window, "m", params$datafreq, "data", params$factor, "factor_model_mean_pi.png", sep = "_")
-ggsave(here("Output", "figures", screening_name), width = 10, height = 8, dpi = 150)
+ghg_obs <- map2_df(map(ghg_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
+env_obs <- map2_df(map(env_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
 
-# add table to summarize screening
+f_plot_obs(ghg_obs)
+f_plot_obs(env_obs)
 
-# -------------------------------------------------------------------------
+ghg_missing_obs <- f_missing_obs(ghg_obs) 
+ghg_missing_obs %>% unclass() %>% write.csv(file = here("output", "ghg_missing_obs.csv"))
+env_missing_obs <- f_missing_obs(env_obs) 
+env_missing_obs %>% unclass() %>% write.csv(file = here("output", "env_missing_obs.csv"))
 
-ghg_obs <- map2_df(map(test, "n_obs"), model_names, ~mutate(.x, model_name = .y))
-env_obs <- map2_df(map(test2, "n_obs"), model_names, ~mutate(.x, model_name = .y))
+# Plot Alpha Cor ----------------------------------------------------------
 
-ghg_obs %>% 
-  filter(!is.na(obs)) %>%
-  group_by(model_name, date) %>%
-  mutate(pct = obs / max(obs)) %>% 
-  summarize(average = mean(pct)) %>%
-  ggplot(aes(average)) +
-  geom_histogram(bins = 10) +
-  facet_wrap(~ model_name, scale = "free", ncol = 3, dir = "v") +
-  labs(title = paste0("Percent Concordant Observations.")) + 
-  scale_x_continuous(labels = percent)
+ghg_alpha_cor <- map2_df(map(ghg_results, "alpha_cor"), model_names, ~mutate(.x, model_name = .y))
+env_alpha_cor <- map2_df(map(env_results, "alpha_cor"), model_names, ~mutate(.x, model_name = .y))
 
-obs_name <- paste(params$window, "m", params$datafreq, "data", params$factor, "factor_model_missing_obs.png", sep = "_")
-ggsave(here("Output", "figures", obs_name), width = 10, height = 8, dpi = 150)
+map2(ghg_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y, "ghg_alpha_cor"))
+map2(env_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y, "env_alpha_cor"))
 
-ghg_obs %>% 
-  filter(!is.na(obs)) %>%
-  group_by(model_name) %>%
-  summarize(n_obs = n(),
-            full_obs = max(obs),
-            avg_obs = mean(obs),
-            missing_obs = mean(obs < full_obs) * n_obs,
-            pct_missing_obs = (missing_obs / n_obs) * 100) %>%
-  knitr::kable(digits = 2)
+ghg_significant_cor <- f_significant_cor(ghg_alpha_cor)
+ghg_significant_cor %>% write.csv(file = here("output", "ghg_significant_cor.csv"))
+env_significant_cor <- f_significant_cor(env_alpha_cor)
+env_significant_cor %>% write.csv(file = here("output", "env_significant_cor.csv"))
 
-# -------------------------------------------------------------------------
+# Plot Ratios -------------------------------------------------------------
 
-ghg_alpha_cor <- map(test, "alpha_cor")
-env_alpha_cor <- map(test2, "alpha_cor")
+ghg_screening <- map2_df(map(ghg_results, "screening"), model_names, ~mutate(.x, model_name = .y))
+env_screening <- map2_df(map(env_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
 
-map2(ghg_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y))
-map2(env_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y))
+f_plot_ratios(ghg_screening)
+f_plot_ratios(env_screening)
 
-.f_plot_hist_cor <- function(.tidy_alpha_cor, .model_name)  {
-  p <- .tidy_alpha_cor %>% 
-    ggplot(aes(value)) +
-    geom_histogram(bins = 30) +
-    facet_wrap(~ factor(date)) +
-    geom_vline(xintercept = -0.3, lty = "dashed") +
-    geom_vline(xintercept = 0.3, lty = "dashed") + 
-    labs(title = paste0("Correlations of Alphas For ", .model_name, "."),
-         subtitle = "Dashed lines correspond to -0.3 and +0.3")
-  
-  alpha_cor_name <- paste(.model_name, params$window, "m", params$datafreq, "data", 
-                          params$factor, "factor_model_alpha_cor.png", sep = "_")
-  ggsave(p, filename = here("Output", "figures", alpha_cor_name), width = 8, height = 8, dpi = 150)
-  
-  return(p)
-}
-f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
-
-# Add pct of cor higher and lower than +- 0.3
-
+ghg_screening_stats <- ghg_screening %>% group_by(model_name) %>% descr()
+ghg_screening_stats %>% write.csv(file = here("output", "ghg_screening_stats.csv"))
+env_screening_stats <- env_screening %>% group_by(model_name) %>% descr()
+env_screening_stats %>% write.csv(file = here("output", "ghg_screening_stats.csv"))
 
 # Portfolio Analysis ------------------------------------------------------
 
-library(PerformanceAnalytics)
-
-port2 <- map2_df(map(ghg_results, "port_ret"), model_names, ~mutate(.x, model_name = .y)) %>% 
+ghg_port <- map2_df(map(ghg_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
+  pivot_wider(., names_from = port, values_from = ret)
+env_port <- map2_df(map(env_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
   pivot_wider(., names_from = port, values_from = ret)
 
-ghg_port_ret <- test$green_bw$port_ret %>% 
-  map_dfr(~bind_rows(.x)) %>% 
-  mutate(model_name = "green_bw") %>%
-  spread(port, ret)
+port_dates <- ghg_port %>% filter(model_name == "Green Bw") %>% select(date)
 
-green_port <- port2 %>%
-  filter(model_name == "Green Bw")
+png(filename = here::here("output", "figures", "ghg_green_port_chart.png"), width = 700, height = 700, units = "px")
+ghg_green_port <- ghg_port %>% 
+  filter(model_name == "Green Bw") %>% 
+  pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
+ghg_green_port <- xts(ghg_green_port[, -1], order.by = port_dates$date)
+ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft")
+dev.off()
 
-green_port_xts <- green_port %>% 
-  select(-(date:model_name)) %>% 
-  as.xts(order.by = green_port$date)
+ghg_brown_port <- ghg_port %>% 
+  filter(model_name == "Brown Bw") %>% 
+  pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
+ghg_brown_port <- xts(ghg_brown_port[, -1], order.by = port_dates$date)
+ghg_brown_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft")
 
-green_port_xts %>% table.Stats() %>% knitr::kable()
-green_port_xts %>% SharpeRatio() %>% knitr::kable()
-green_port_xts %>% table.DownsideRisk() %>%  knitr::kable()
-green_port_xts %>% chart.Histogram()
-green_port_xts %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
-green_port_xts %>% chart.QQPlot()
-green_port_xts %>% charts.PerformanceSummary()
-green_port_xts %>% charts.RollingPerformance()
-green_port_xts %>% VaR()
+ghg_neutral_port <- ghg_port %>% 
+  filter(model_name == "Neutral Bw") %>% 
+  pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% 
+  select(-period) %>% 
+  clean_names()
+ghg_neutral_port <- xts(ghg_neutral_port[, -1], order.by = port_dates$date)
+ghg_neutral_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft")
 
+ghg_green_port %>% table.Stats()
+ghg_green_port %>% SharpeRatio()
+ghg_green_port %>% table.DownsideRisk()
+ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
 
+ghg_green_port %>% table.Stats()
+ghg_green_port %>% SharpeRatio()
+ghg_green_port %>% table.DownsideRisk()
+ghg_green_port %>% chart.Histogram()
+ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
+ghg_green_port %>% chart.QQPlot()
+ghg_green_port %>% charts.PerformanceSummary()
+ghg_green_port %>% charts.RollingPerformance()
+ghg_green_port %>% VaR()
+
+ghg_green_port %>% table.Stats()
+ghg_green_port %>% SharpeRatio()
+ghg_green_port %>% table.DownsideRisk()
+ghg_green_port %>% chart.Histogram()
+ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
+ghg_green_port %>% chart.QQPlot()
+ghg_green_port %>% charts.PerformanceSummary()
+ghg_green_port %>% charts.RollingPerformance()
+ghg_green_port %>% VaR()
 
 
 
