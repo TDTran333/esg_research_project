@@ -344,14 +344,26 @@ f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
   
   permno <- .alpha_screen %>%
     as_tibble() %>%
-    select(pipos, pineg) %>% 
+    select(alpha, pipos, pineg) %>% 
     mutate(permno = id_names)
   
-  top_10    <- permno %>% slice_max(pipos, n = 10)
+  top_10 <- permno %>% slice_max(pipos, n = 10)
+  top_10_pct <- permno %>% slice_max(pipos, prop = .10)
   bottom_10 <- permno %>% slice_max(pineg, n = 10)
-  benchmark <- permno %>% filter(!permno %in% c(top_10$permno, bottom_10$permno))
-  list(top_10$permno, bottom_10$permno, benchmark$permno) %>% 
-    `names<-`(c("top_10", "bottom_10", "benchmark"))
+  bottom_10_pct <- permno %>% slice_max(pineg, prop = .10)
+  top_10_alpha <- permno %>% slice_max(alpha, n = 10)
+  top_10_alpha_pct <- permno %>% slice_max(alpha, prop = .10)
+  bottom_10_alpha <- permno %>% slice_min(alpha, n = 10)
+  bottom_10_alpha_pct <- permno %>% slice_min(alpha, prop = .10)
+  benchmark_minus_20 <- permno %>% filter(!permno %in% c(top_10$permno, bottom_10$permno))
+  benchmark_minus_20_pct <- permno %>% filter(!permno %in% c(top_10_pct$permno, bottom_10_pct$permno))
+  
+  list(top_10$permno, bottom_10$permno, benchmark_minus_20$permno,
+       top_10_pct$permno, bottom_10_pct$permno, benchmark_minus_20_pct$permno,
+       top_10_alpha$permno, top_10_alpha_pct$permno, bottom_10_alpha$permno, bottom_10_alpha_pct$permno) %>% 
+    `names<-`(c("top_10", "bottom_10", "benchmark_minus_20",
+                "top_10_pct", "bottom_10_pct", "benchmark_minus_20_pct",
+                "top_10_alpha", "top_10_alpha_pct", "bottom_10_alpha", "bottom_10_alpha_pct"))
 }
 f_port_permno <- compiler::cmpfun(.f_port_permno)
 
@@ -378,11 +390,21 @@ f_port_permno <- compiler::cmpfun(.f_port_permno)
                 period = .id_date)
   }
   
-  top_10_ret    <- .df %>% port_ret(.port_permno$top_10, .id_date, .datafreq, "top_10")
+  top_10_ret <- .df %>% port_ret(.port_permno$top_10, .id_date, .datafreq, "top_10")
+  top_10_pct_ret <- .df %>% port_ret(.port_permno$top_10_pct, .id_date, .datafreq, "top_10_pct")
   bottom_10_ret <- .df %>% port_ret(.port_permno$bottom_10, .id_date, .datafreq, "bottom_10")
-  benchmark_ret <- .df %>% port_ret(.port_permno$benchmark, .id_date, .datafreq, "benchmark")
-  list(top_10_ret, bottom_10_ret, benchmark_ret) %>% 
-    `names<-`(c("top_10", "bottom_10", "benchmark"))
+  bottom_10_pct_ret <- .df %>% port_ret(.port_permno$bottom_10_pct, .id_date, .datafreq, "bottom_10_pct")
+  top_10_alpha_ret <- .df %>% port_ret(.port_permno$top_10_alpha, .id_date, .datafreq, "top_10_alpha")
+  top_10_alpha_pct_ret <- .df %>% port_ret(.port_permno$top_10_alpha_pct, .id_date, .datafreq, "top_10_alpha_pct")
+  bottom_10_alpha_ret <- .df %>% port_ret(.port_permno$bottom_10_alpha, .id_date, .datafreq, "bottom_10_alpha")
+  bottom_10_alpha_pct_ret <- .df %>% port_ret(.port_permno$bottom_10_alpha_pct, .id_date, .datafreq, "bottom_10_alpha_pct")
+  benchmark_minus_20_ret <- .df %>% port_ret(.port_permno$benchmark_minus_20, .id_date, .datafreq, "benchmark_minus_20")
+  benchmark_minus_20_pct_ret <- .df %>% port_ret(.port_permno$benchmark_minus_20_pct, .id_date, .datafreq, "benchmark_minus_20_pct")
+  
+  list(top_10_ret, top_10_alpha_ret, bottom_10_ret, bottom_10_alpha_ret, benchmark_minus_20_ret,
+       top_10_pct_ret, top_10_alpha_pct_ret, bottom_10_pct_ret, bottom_10_alpha_pct_ret, benchmark_minus_20_pct_ret) %>% 
+    `names<-`(c("top_10", "top_10_alpha", "bottom_10", "bottom_10_alpha", "benchmark_minus_20",
+                "top_10_pct", "top_10_alpha_pct", "bottom_10_pct", "bottom_10_alpha_pct", "benchmark_minus_20_pct"))
 }
 f_port_ret <- compiler::cmpfun(.f_port_ret)
 
