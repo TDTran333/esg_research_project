@@ -5,149 +5,76 @@ source(here::here("function", "screening_funs_V2.R"))
 
 # Plotting Results -----------------------------------------------------------------
 
+st_options(round.digits = 4, style = "rmarkdown", plain.ascii = FALSE)
+
+# Plot Obs ----------------------------------------------------------------
+
 model_names <- str_to_title(gsub("_", " ", names(ghg_results)))
 
+ghg_obs <- map2_df(map(ghg_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
+env_obs <- map2_df(map(env_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
+
+f_plot_obs(ghg_obs)
+f_plot_obs(env_obs)
+
+ghg_missing_obs <- f_missing_obs(ghg_obs) 
+ghg_missing_obs %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_ghg_missing_obs.csv")))
+env_missing_obs <- f_missing_obs(env_obs) 
+env_missing_obs %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_env_missing_obs.csv")))
+
+# Plot Alpha Cor ----------------------------------------------------------
+
+ghg_alpha_cor <- map2_df(map(ghg_results, "alpha_cor"), model_names, ~mutate(.x, model_name = .y))
+env_alpha_cor <- map2_df(map(env_results, "alpha_cor"), model_names, ~mutate(.x, model_name = .y))
+
+map2(ghg_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y, "ghg_alpha_cor"))
+map2(env_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y, "env_alpha_cor"))
+
+ghg_significant_cor <- f_significant_cor(ghg_alpha_cor)
+ghg_significant_cor %>% write.csv(file = here("output", "ghg_significant_cor.csv"))
+env_significant_cor <- f_significant_cor(env_alpha_cor)
+env_significant_cor %>% write.csv(file = here("output", "env_significant_cor.csv"))
+
+# Plot Ratios -------------------------------------------------------------
+
 ghg_screening <- map2_df(map(ghg_results, "screening"), model_names, ~mutate(.x, model_name = .y))
-env_screening <- map2_df(map(env_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
+env_screening <- map2_df(map(env_results, "screening"), model_names, ~mutate(.x, model_name = .y))
 
-test4 <- function(x){
-  print(x)
-  print(deparse(substitute(x)))
-}
+f_plot_ratios(ghg_screening)
+f_plot_ratios(env_screening)
 
-test4(head(ghg_screening))
-
-f_plot_screening <- function(.screening_df){
-  
-  title <- paste0("Mean Out/Under-Performance Ratios Using ", 
-                  params$window, "-Month Rolling Window based on ", 
-                  deparse(substitute(.screening_df)), ".")
-  
-  p <- .screening_df %>%
-    ggplot(aes(date, value, color = name)) +
-    geom_line(size = 1.5) +
-    facet_wrap(~ model_name, ncol = 2, dir = "h", scale = "free_x") +
-    labs(title = title,
-         subtitle = paste0("Backward-Looking and Forward-Looking for Green, Brown and Neutral Firms Using ",
-                           params$factor, "-factor model."),
-         x = "Date",
-         y = "Percent",
-         color = "Ratios") +
-    scale_y_continuous(labels = percent) +
-    scale_x_yearqtr(format = "%Y-Q%q")
-  
-  screening_name <- paste(deparse(substitute(.screening_df)), params$window, "m", params$datafreq, "data", 
-                          params$factor, "factor_model.png", sep = "_")
-  ggsave(p, filename = here("Output", "figures", screening_name), width = 10, height = 8, dpi = 150)
-  
-  return(p)
-}
-
-f_plot_screening(ghg_screening)
-
-env_screening %>%
-  mutate(model_name = fct_relevel(model_name, c(paste0(esg_group, "_bw"), paste0(esg_group, "_fw")))) %>% 
-  ggplot(aes(date, value, color = name)) +
-  geom_line(size = 1.5) +
-  facet_wrap(~ model_name, ncol = 2, dir = "v", scale = "free_x") +
-  labs(title = paste0("Mean Out/Under-Performance Ratios Using ",params$window, "-Month Rolling Window."),
-       subtitle = paste0("Backward-looking and forward-looking for Green, Brown and Neutral firms using ",
-                         params$factor, "-factor model."),
-       x = "Date",
-       y = "Percent",
-       color = "Ratios") +
-  scale_y_continuous(labels = percent) +
-  scale_x_yearqtr(format = "%Y-Q%q")
-
-screening_name <- paste(params$window, "m", params$datafreq, "data", params$factor, "factor_model_mean_pi.png", sep = "_")
-ggsave(here("Output", "figures", screening_name), width = 10, height = 8, dpi = 150)
-
-# add table to summarize screening
-
-# -------------------------------------------------------------------------
-
-ghg_obs <- map2_df(map(test, "n_obs"), model_names, ~mutate(.x, model_name = .y))
-env_obs <- map2_df(map(test2, "n_obs"), model_names, ~mutate(.x, model_name = .y))
-
-ghg_obs %>% 
-  filter(!is.na(obs)) %>%
-  group_by(model_name, date) %>%
-  mutate(pct = obs / max(obs)) %>% 
-  summarize(average = mean(pct)) %>%
-  ggplot(aes(average)) +
-  geom_histogram(bins = 10) +
-  facet_wrap(~ model_name, scale = "free", ncol = 3, dir = "v") +
-  labs(title = paste0("Percent Concordant Observations.")) + 
-  scale_x_continuous(labels = percent)
-
-obs_name <- paste(params$window, "m", params$datafreq, "data", params$factor, "factor_model_missing_obs.png", sep = "_")
-ggsave(here("Output", "figures", obs_name), width = 10, height = 8, dpi = 150)
-
-ghg_obs %>% 
-  filter(!is.na(obs)) %>%
-  group_by(model_name) %>%
-  summarize(n_obs = n(),
-            full_obs = max(obs),
-            avg_obs = mean(obs),
-            missing_obs = mean(obs < full_obs) * n_obs,
-            pct_missing_obs = (missing_obs / n_obs) * 100) %>%
-  knitr::kable(digits = 2)
-
-# -------------------------------------------------------------------------
-
-ghg_alpha_cor <- map(test, "alpha_cor")
-env_alpha_cor <- map(test2, "alpha_cor")
-
-map2(ghg_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y))
-map2(env_alpha_cor, model_names, ~f_plot_hist_cor(.x, .y))
-
-.f_plot_hist_cor <- function(.tidy_alpha_cor, .model_name)  {
-  p <- .tidy_alpha_cor %>% 
-    ggplot(aes(value)) +
-    geom_histogram(bins = 30) +
-    facet_wrap(~ factor(date)) +
-    geom_vline(xintercept = -0.3, lty = "dashed") +
-    geom_vline(xintercept = 0.3, lty = "dashed") + 
-    labs(title = paste0("Correlations of Alphas For ", .model_name, "."),
-         subtitle = "Dashed lines correspond to -0.3 and +0.3")
-  
-  alpha_cor_name <- paste(.model_name, params$window, "m", params$datafreq, "data", 
-                          params$factor, "factor_model_alpha_cor.png", sep = "_")
-  ggsave(p, filename = here("Output", "figures", alpha_cor_name), width = 8, height = 8, dpi = 150)
-  
-  return(p)
-}
-f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
-
-# Add pct of cor higher and lower than +- 0.3
-
+ghg_screening_stats <- ghg_screening %>% group_by(model_name) %>% descr()
+ghg_screening_stats %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_ghg_ratios_stats.csv")))
+env_screening_stats <- env_screening %>% group_by(model_name) %>% descr()
+env_screening_stats %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_env_ratios_stats.csv")))
 
 # Portfolio Analysis ------------------------------------------------------
 
-library(PerformanceAnalytics)
-
-port2 <- map2_df(map(ghg_results, "port_ret"), model_names, ~mutate(.x, model_name = .y)) %>% 
+ghg_port <- map2_df(map(ghg_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
+  pivot_wider(., names_from = port, values_from = ret)
+env_port <- map2_df(map(env_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
   pivot_wider(., names_from = port, values_from = ret)
 
-ghg_port_ret <- test$green_bw$port_ret %>% 
-  map_dfr(~bind_rows(.x)) %>% 
-  mutate(model_name = "green_bw") %>%
-  spread(port, ret)
+ghg_green_port_growth <- f_port_growth(ghg_port, "Green Bw")
+ghg_brown_port_growth <- f_port_growth(ghg_port, "Brown Bw")
+ghg_neutral_port_growth <- f_port_growth(ghg_port, "Neutral Bw")
 
-green_port <- port2 %>%
-  filter(model_name == "Green Bw")
+f_port_growth_chart(ghg_green_port_growth, "Green")
+f_port_growth_chart(ghg_brown_port_growth, "Brown")
+f_port_growth_chart(ghg_neutral_port_growth, "Neutral")
 
-green_port_xts <- green_port %>% 
-  select(-(date:model_name)) %>% 
-  as.xts(order.by = green_port$date)
+env_green_port_growth <- f_port_growth(env_port, "Green Bw")
+env_brown_port_growth <- f_port_growth(env_port, "Brown Bw")
+env_neutral_port_growth <- f_port_growth(env_port, "Neutral Bw")
 
-green_port_xts %>% table.Stats() %>% knitr::kable()
-green_port_xts %>% SharpeRatio() %>% knitr::kable()
-green_port_xts %>% table.DownsideRisk() %>%  knitr::kable()
-green_port_xts %>% chart.Histogram()
-green_port_xts %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topright")
-green_port_xts %>% chart.QQPlot()
-green_port_xts %>% charts.PerformanceSummary()
-green_port_xts %>% charts.RollingPerformance()
-green_port_xts %>% VaR()
+f_port_growth_chart(env_green_port_growth, "Green")
+f_port_growth_chart(env_brown_port_growth, "Brown")
+f_port_growth_chart(env_neutral_port_growth, "Neutral")
 
+ghg_green_port_stats <- f_port_stats(ghg_port, "Green Bw")
+ghg_brown_port_stats <- f_port_stats(ghg_port, "Brown Bw")
+ghg_neutral_port_stats <- f_port_stats(ghg_port, "Neutral Bw")
+
+env_green_port_stats <- f_port_stats(env_port, "Green Bw")
+env_brown_port_stats <- f_port_stats(env_port, "Brown Bw")
+env_neutral_port_stats <- f_port_stats(env_port, "Neutral Bw")

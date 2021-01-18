@@ -7,7 +7,7 @@ source(here::here("code", "source.R"))
 params          <- list()         
 params$control  <- list(nCore = 3)           # Number of core and other controls
 params$subDir   <- "2009-2017"               # Sample period
-params$datafreq <- "monthly"                 # Data frequency : "monthly" or "daily"       
+params$datafreq <- "daily"                   # Data frequency : "monthly" or "daily"       
 params$window   <- 36                        # Rolling window in # of months
 params$nblock   <- 20                        # Number of blocks in screenplots
 params$factor   <- "six"                     # Factor model : "three" or "six"
@@ -134,7 +134,7 @@ f_run_model <- partial(f_process_model,
                        .nblock       = params$nblock, 
                        .control      = params$control)
 
-ghg_results2 <- env_results2 <- list()
+ghg_results <- env_results <- list()
 ghg_results[paste0(esg_group, "_bw")] <- map(esg_group, ~f_run_model(.id = ghg_id[[.x]], 
                                                                       .id_name = paste0("ghg_id['", .x, "']"), 
                                                                       .model = "bw"))
@@ -144,11 +144,11 @@ ghg_results[paste0(esg_group, "_fw")] <- map(esg_group, ~f_run_model(.id = ghg_i
                                                                       .model = "fw",
                                                                       .run_port = FALSE))
 
-env_results[paste0(esg_group, "_bw")] <- map(esg_group, ~f_run_model(.id = ghg_id[[.x]], 
-                                                                     .id_name = paste0("ghg_id['", .x, "']"), 
+env_results[paste0(esg_group, "_bw")] <- map(esg_group, ~f_run_model(.id = env_id[[.x]], 
+                                                                     .id_name = paste0("env_id['", .x, "']"), 
                                                                      .model = "bw"))
-env_results[paste0(esg_group, "_fw")] <- map(esg_group, ~f_run_model(.id = ghg_id[[.x]], 
-                                                                     .id_name = paste0("ghg_id['", .x, "']"), 
+env_results[paste0(esg_group, "_fw")] <- map(esg_group, ~f_run_model(.id = env_id[[.x]], 
+                                                                     .id_name = paste0("env_id['", .x, "']"), 
                                                                      .model = "fw",
                                                                      .run_port = FALSE))
 
@@ -184,9 +184,9 @@ f_plot_obs(ghg_obs)
 f_plot_obs(env_obs)
 
 ghg_missing_obs <- f_missing_obs(ghg_obs) 
-ghg_missing_obs %>% unclass() %>% write.csv(file = here("output", "ghg_missing_obs.csv"))
+ghg_missing_obs %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_ghg_missing_obs.csv")))
 env_missing_obs <- f_missing_obs(env_obs) 
-env_missing_obs %>% unclass() %>% write.csv(file = here("output", "env_missing_obs.csv"))
+env_missing_obs %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_env_missing_obs.csv")))
 
 # Plot Alpha Cor ----------------------------------------------------------
 
@@ -204,15 +204,15 @@ env_significant_cor %>% write.csv(file = here("output", "env_significant_cor.csv
 # Plot Ratios -------------------------------------------------------------
 
 ghg_screening <- map2_df(map(ghg_results, "screening"), model_names, ~mutate(.x, model_name = .y))
-env_screening <- map2_df(map(env_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
+env_screening <- map2_df(map(env_results, "screening"), model_names, ~mutate(.x, model_name = .y))
 
 f_plot_ratios(ghg_screening)
 f_plot_ratios(env_screening)
 
 ghg_screening_stats <- ghg_screening %>% group_by(model_name) %>% descr()
-ghg_screening_stats %>% write.csv(file = here("output", "ghg_screening_stats.csv"))
+ghg_screening_stats %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_ghg_ratios_stats.csv")))
 env_screening_stats <- env_screening %>% group_by(model_name) %>% descr()
-env_screening_stats %>% write.csv(file = here("output", "ghg_screening_stats.csv"))
+env_screening_stats %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_env_ratios_stats.csv")))
 
 # Portfolio Analysis ------------------------------------------------------
 
@@ -221,57 +221,29 @@ ghg_port <- map2_df(map(ghg_results[1:3], "port_ret"), model_names[1:3], ~mutate
 env_port <- map2_df(map(env_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
   pivot_wider(., names_from = port, values_from = ret)
 
-port_dates <- ghg_port %>% filter(model_name == "Green Bw") %>% select(date)
+ghg_green_port_growth <- f_port_growth(ghg_port, "Green Bw")
+ghg_brown_port_growth <- f_port_growth(ghg_port, "Brown Bw")
+ghg_neutral_port_growth <- f_port_growth(ghg_port, "Neutral Bw")
 
-f_port_chart <- function(.port, .port_type) {
-  
-  title <- paste0(deparse(substitute(.port)), "_", .port_type)
+f_port_growth_chart(ghg_green_port_growth, "Green")
+f_port_growth_chart(ghg_brown_port_growth, "Brown")
+f_port_growth_chart(ghg_neutral_port_growth, "Neutral")
 
-  png(filename = here::here("output", "figures", paste0(title, "_chart.png")), width = 700, height = 700, units = "px")
-  port_wide <- .port %>% 
-    filter(model_name == "Green Bw") %>% 
-    pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
-  port_xts <- xts(port_wide[, -1], order.by = port_wide$date)
-  port_xts %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft", plot.engine = "ggplot2")
+env_green_port_growth <- f_port_growth(env_port, "Green Bw")
+env_brown_port_growth <- f_port_growth(env_port, "Brown Bw")
+env_neutral_port_growth <- f_port_growth(env_port, "Neutral Bw")
 
-  # alpha_cor_name <- paste(.esg_name, .model_name, params$window, "m", params$datafreq, "data", 
-  #                         params$factor, "factor_model_alpha_cor.png", sep = "_")
-  # ggsave(p, filename = here("Output", "figures", alpha_cor_name), width = 8, height = 8, dpi = 150)
-  
-  return(port_xts)
-}
+f_port_growth_chart(env_green_port_growth, "Green")
+f_port_growth_chart(env_brown_port_growth, "Brown")
+f_port_growth_chart(env_neutral_port_growth, "Neutral")
 
-f_port_chart(ghg_port, "Green Bw")
+ghg_green_port_stats <- f_port_stats(ghg_port, "Green Bw")
+ghg_brown_port_stats <- f_port_stats(ghg_port, "Brown Bw")
+ghg_neutral_port_stats <- f_port_stats(ghg_port, "Neutral Bw")
 
-
-png(filename = here::here("output", "figures", "ghg_green_port_chart.png"), width = 700, height = 700, units = "px")
-ghg_green_port <- ghg_port %>% 
-  filter(model_name == "Green Bw") %>% 
-  pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
-ghg_green_port <- xts(ghg_green_port[, -1], order.by = port_dates$date)
-ghg_green_port %>% chart.CumReturns(wealth.index = TRUE, legend.loc = "topleft", plot.engine = "ggplot2")
-
-f_port_stats <- function(.port_xts, .port_type) {
-
-  filename <- paste0(deparse(substitute(.port_xts)), "_", .port_type)
-  stats <- .port_xts %>% table.Stats() 
-  stats %>% write.csv(file = here("output", paste0(filename, "_stats.csv")))
-  sharpe <- .port_xts %>% SharpeRatio() 
-  sharpe %>% write.csv(file = here("output", paste0(filename, "_sharpe.csv")))
-  downsiderisk <- .port_xts %>% table.DownsideRisk() 
-  downsiderisk %>% write.csv(file = here("output", paste0(filename, "_downside_risk.csv")))
-  
-}
-  
-f_port_stats(ghg_green_port, "Green Bw")
-  
-  
-  
-
-
-
-
-
+env_green_port_stats <- f_port_stats(env_port, "Green Bw")
+env_brown_port_stats <- f_port_stats(env_port, "Brown Bw")
+env_neutral_port_stats <- f_port_stats(env_port, "Neutral Bw")
 
 
 

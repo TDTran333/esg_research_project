@@ -3,31 +3,29 @@ shhh(require(lubridate))               # Date management
 
 # Functions Descriptions --------------------------------------------------
 
-# 1. f_create_esg_type:  Create ESG type by quantile of rolling mean of esg variable
-# 2. f_create_trans_mat: Create transition matrix
-# 3. f_create_id:        Identify a list of permno by ESG group
-# 4. f_create_dates:     create dates for loop
-# 5. f_ret_mat:          Generate ret_mat from data_df
-# 6. f_factor_mat:       Generate factor_mat from factor_df
-# 7. alpha screen:       Alpha screening function
-# 8. f_alpha_cor:        Alpha correlations
-# 9. f_tbl_screening:    Summary table of probability ratios
-# 10. f_screenplot:      Create screenplot
-
-# f_main_process:        Runs the previous 10 functions.
-
-# 11. f_tidy_screening:  Create tidy df of pi results for plotting
-# 12. f_tidy_n_obs:      Create tidy df of concordant obs for plotting
-# 13. f_tidy_alpha_cor:  Create tidy df of alpha cor plotting
-
-# 14. f_plot_obs:        Plot histograms of concordant obs
-# 14. f_missing_obs:     Descriptive stats of missing obs
-# 16. f_plot_hist_cor:   Plot histograms of alpha cor
-# 17. f_significant_cor: Percent significant cor
-# 18. f_plot_ratios:     Plot line plot of pi ratios
-
-# 19. f_port_permno:     Create list of permno for portfolio
-# 20. f_port_ret:        Calculate returns with rebalancing
+# 1. f_create_esg_type:     Create ESG type by quantile of rolling mean of esg variable
+# 2. f_create_trans_mat:    Create transition matrix
+# 3. f_create_id:           Identify a list of permno by ESG group
+# 4. f_create_dates:        create dates for loop
+# 5. f_ret_mat:             Generate ret_mat from data_df
+# 6. f_factor_mat:          Generate factor_mat from factor_df
+# 7. alpha screen:          Alpha screening function
+# 8. f_alpha_cor:           Alpha correlations
+# 9. f_tbl_screening:       Summary table of probability ratios
+# 10. f_screenplot:         Create screenplot
+# 11. f_tidy_screening:     Create tidy df of pi results for plotting
+# 12. f_tidy_n_obs:         Create tidy df of concordant obs for plotting
+# 13. f_tidy_alpha_cor:     Create tidy df of alpha cor plotting
+# 14. f_plot_obs:           Plot histograms of concordant obs
+# 14. f_missing_obs:        Descriptive stats of missing obs
+# 16. f_plot_hist_cor:      Plot histograms of alpha cor
+# 17. f_significant_cor:    Percent significant cor
+# 18. f_plot_ratios:        Plot line plot of pi ratios
+# 19. f_port_permno:        Create list of permno for portfolio
+# 20. f_port_ret:           Calculate returns with rebalancing
+# 21. f_port_growth         Calculate portfolio growth
+# 22. f_port_growth_chart:  Chart portfolios
+# 23: f_port_stats:         Portfolio statistics
 
 # -------------------------------------------------------------------------
 
@@ -491,4 +489,74 @@ f_port_permno <- compiler::cmpfun(.f_port_permno)
                 "top_10_pct", "top_10_alpha_pct", "bottom_10_pct", "bottom_10_alpha_pct", "benchmark_minus_20_pct"))
 }
 f_port_ret <- compiler::cmpfun(.f_port_ret)
+
+# -------------------------------------------------------------------------
+
+.f_port_growth <- function(.port, .model_name) {
+  
+  wider_port <- .port %>% 
+    filter(model_name == .model_name) %>% 
+    pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
+  
+  longer_port <- sapply(wider_port[,-1] + 1, cumprod) %>% 
+    as_tibble() %>% 
+    mutate(date = wider_port$date) %>% 
+    pivot_longer(-date)
+}
+
+f_port_growth <- compiler::cmpfun(.f_port_growth)
+
+# -------------------------------------------------------------------------
+
+.f_port_growth_chart <- function(.port, .esg_name) {
+  
+  title <- paste0("Portfolio Growth with ", str_to_title(params$datafreq), " Data Using ", .esg_name, " Firms Universe.")
+  
+  p <- .port %>% 
+    ggplot(aes(date, value, color = name)) +
+    geom_line() +
+    facet_wrap(~name, scale = "free_y") +
+    scale_y_continuous(labels = percent) +
+    labs(title = title,
+         x = "Date",
+         y = "Percent") +
+    theme(legend.position = "none")
+  
+  port_growth_chart <- paste(deparse(substitute(.port)), params$window, "m", params$datafreq, "data",
+                             params$factor, "factor_model_port_growth_chart.png", sep = "_")
+  ggsave(p, filename = here("Output", "figures", port_growth_chart), width = 10, height = 8, dpi = 150)
+  
+  return(p)
+}
+
+f_port_growth_chart <- compiler::cmpfun(.f_port_growth_chart)
+
+# -------------------------------------------------------------------------
+
+.f_port_stats <- function(.port, .model_name) {
+  
+  select_port <- ghg_port %>% 
+    filter(model_name == .model_name)
+  
+  port_xts <- xts(select_port[, -(1:3)], order.by = select_port$date)
+  
+  filename <- paste0(deparse(substitute(.port)), "_", .model_name)
+  
+  stats <- port_xts %>% table.Stats() 
+  stats %>% write.csv(file = here("output", paste0(filename, "_stats.csv")))
+  
+  sharpe <- port_xts %>% SharpeRatio() 
+  sharpe %>% write.csv(file = here("output", paste0(filename, "_sharpe.csv")))
+  
+  downside_risk <- port_xts %>% table.DownsideRisk() 
+  downside_risk %>% write.csv(file = here("output", paste0(filename, "_downside_risk.csv")))
+  
+  out <- list(stats, sharpe, downside_risk) %>% `names<-`(c("stats", "sharpe", "downside_risk"))
+  
+  return(out)
+}
+f_port_stats <- compiler::cmpfun(.f_port_stats)
+
+# -------------------------------------------------------------------------
+
 
