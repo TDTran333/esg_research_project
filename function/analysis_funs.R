@@ -4,28 +4,31 @@ shhh(require(lubridate))               # Date management
 # Functions Descriptions --------------------------------------------------
 
 # 1. f_create_esg_type:     Create ESG type by quantile of rolling mean of esg variable
-# 2. f_create_trans_mat:    Create transition matrix
-# 3. f_create_id:           Identify a list of permno by ESG group
-# 4. f_create_dates:        create dates for loop
-# 5. f_ret_mat:             Generate ret_mat from data_df
-# 6. f_factor_mat:          Generate factor_mat from factor_df
-# 7. alpha screen:          Alpha screening function
-# 8. f_alpha_cor:           Alpha correlations
-# 9. f_tbl_screening:       Summary table of probability ratios
-# 10. f_screenplot:         Create screenplot
-# 11. f_tidy_screening:     Create tidy df of pi results for plotting
-# 12. f_tidy_n_obs:         Create tidy df of concordant obs for plotting
-# 13. f_tidy_alpha_cor:     Create tidy df of alpha cor plotting
-# 14. f_plot_obs:           Plot histograms of concordant obs
-# 14. f_missing_obs:        Descriptive stats of missing obs
-# 16. f_plot_hist_cor:      Plot histograms of alpha cor
-# 17. f_significant_cor:    Percent significant cor
-# 18. f_plot_ratios:        Plot line plot of pi ratios
-# 19. f_port_permno:        Create list of permno for portfolio
-# 20. f_port_ret:           Calculate returns with rebalancing
-# 21. f_port_growth         Calculate portfolio growth
-# 22. f_port_growth_chart:  Chart portfolios
-# 23: f_port_stats:         Portfolio statistics
+# 2. f_plot_firms:          Average number of firms observations per year.
+# 3. f_firms_count:         Table format of above
+# 4. f_create_trans_mat:    Create transition matrix
+# 5. f_create_id:           Identify a list of permno by ESG group
+# 6. f_create_dates:        create dates for loop
+# 7. f_ret_mat:             Generate ret_mat from data_df
+# 8. f_factor_mat:          Generate factor_mat from factor_df
+# 9. alpha screen:          Alpha screening function
+
+# 11. f_tbl_screening:      Summary table of probability ratios
+# 12. f_screenplot:         Create screenplot
+# 13. f_tidy_screening:     Create tidy df of pi results for plotting
+# 14. f_tidy_n_obs:         Create tidy df of concordant obs for plotting
+# 15. f_tidy_alpha_cor:     Create tidy df of alpha cor plotting
+# 16. f_plot_obs:           Plot histograms of concordant obs
+# 17. f_missing_obs:        Descriptive stats of missing obs
+# 18. f_plot_hist_cor:      Plot histograms of alpha cor
+# 19. f_significant_cor:    Percent significant cor
+# 20. f_plot_ratios:        Plot line plot of pi ratios
+# 21. f_port_permno:        Create list of permno for portfolio
+# 22. f_port_ret:           Calculate returns with rebalancing
+# 23. f_port_growth         Calculate portfolio growth
+# 24. f_port_growth_chart:  Chart portfolios
+# 25: f_port_stats:         Portfolio statistics
+
 
 # -------------------------------------------------------------------------
 
@@ -65,6 +68,53 @@ shhh(require(lubridate))               # Date management
     ungroup()
 }
 f_create_esg_type <- compiler::cmpfun(.f_create_esg_type)
+
+# -------------------------------------------------------------------------
+
+.f_plot_firms <- function(.df, .esg_var) {
+  
+  color = c("#cb997e", "#06d6a0", "#bfc0c0", "#ffffff")
+  
+  p <- .df %>%
+    group_by(date, esg_type) %>% 
+    count() %>%
+    group_by(year = year(date), esg_type) %>% 
+    summarize(avg = round(mean(n), 0)) %>% 
+    ggplot(aes(year, avg, fill = esg_type)) +
+    geom_col(width = 0.8, colour = "black") +
+    geom_text(aes(label = avg),  position = position_stack(vjust = .5)) +
+    scale_fill_manual(values = color) +
+    scale_x_continuous(breaks = params$sample_per) +
+    labs(x = "Year",
+         y = "# of firms",
+         fill = "Esg group",
+         title = paste0("Average Number of Firms Observations for ", .esg_var, ".") ,
+         subtitle = "Brown, Green, Neutral and Undisclosed.")
+  
+  firms_name <- paste(deparse(substitute(.df)), "avg_number_of_firms.png", sep = "_")
+  ggsave(here("Output", "figures", "firms", firms_name), width = 6, height = 6, dpi = 150)
+  
+  return(p)
+}
+f_plot_firms <- compiler::cmpfun(.f_plot_firms)
+
+# -------------------------------------------------------------------------
+
+.f_firms_count <-  function(.df){
+  
+  out <- .df %>%
+    group_by(date, esg_type) %>% 
+    count() %>%
+    group_by(year = year(date), esg_type) %>% 
+    summarize(avg = round(mean(n), 0)) %>%
+    pivot_wider(names_from = esg_type, values_from = avg)
+  
+  filename <- paste(deparse(substitute(.df)), "avg_esg_firms.csv", sep = "_")
+  
+  out %>% write.csv(file = here("output", "firms", filename))
+  return(out)
+}
+f_firms_count <- compiler::cmpfun(.f_firms_count)
 
 # -------------------------------------------------------------------------
 
@@ -196,7 +246,9 @@ f_factor_mat <- compiler::cmpfun(.f_factor_mat)
     mutate(row = row_number()) %>% 
     arrange(permno) %>%  
     widyr::pairwise_cor(permno, row, residuals, upper = FALSE, method = .method) %>% 
-    mutate(date = .date)
+    mutate(date = .date) %>%
+    filter(!is.na(correlation)) %>%
+    select(date, correlation)
   
   return(out)
 }
@@ -308,17 +360,6 @@ f_tidy_n_obs <- compiler::cmpfun(.f_tidy_n_obs)
 
 # -------------------------------------------------------------------------
 
-.f_tidy_alpha_cor <- function(.alpha_cor) {
-  .alpha_cor %>%
-    bind_rows() %>% 
-    select(date, correlation) %>% 
-    pivot_longer(-date) %>% 
-    filter(!is.na(value))
-}
-f_tidy_alpha_cor <- compiler::cmpfun(.f_tidy_alpha_cor)
-
-# -------------------------------------------------------------------------
-
 .f_plot_obs <- function(.obs_df) {
   p <- .obs_df %>% 
     filter(!is.na(obs)) %>%
@@ -333,7 +374,7 @@ f_tidy_alpha_cor <- compiler::cmpfun(.f_tidy_alpha_cor)
   
   obs_name <- paste(deparse(substitute(.obs_df)), params$window, "m", 
                     params$datafreq, "data", params$factor, "factor_model_missing_obs.png", sep = "_")
-  ggsave(here("Output", "figures", obs_name), width = 10, height = 8, dpi = 150)
+  ggsave(here("Output", "figures", "obs", obs_name), width = 10, height = 8, dpi = 150)
   
   return(p)
 }
@@ -358,8 +399,9 @@ f_missing_obs <- compiler::cmpfun(.f_missing_obs)
 # -------------------------------------------------------------------------
 
 .f_plot_hist_cor <- function(.alpha_cor, .model_name, .esg_name)  {
-  p <- .alpha_cor %>% 
-    ggplot(aes(value)) +
+  p <- .alpha_cor %>%
+    filter(model_name == .model_name) %>%
+    ggplot(aes(correlation)) +
     geom_histogram(bins = 30) +
     facet_wrap(~ factor(date)) +
     geom_vline(xintercept = -0.3, lty = "dashed") +
@@ -369,7 +411,7 @@ f_missing_obs <- compiler::cmpfun(.f_missing_obs)
   
   alpha_cor_name <- paste(.esg_name, .model_name, params$window, "m", params$datafreq, "data", 
                           params$factor, "factor_model_alpha_cor.png", sep = "_")
-  ggsave(p, filename = here("Output", "figures", alpha_cor_name), width = 8, height = 8, dpi = 150)
+  ggsave(p, filename = here("Output", "figures", "correlation", alpha_cor_name), width = 8, height = 8, dpi = 150)
   
   return(p)
 }
@@ -380,8 +422,8 @@ f_plot_hist_cor <- compiler::cmpfun(.f_plot_hist_cor)
 .f_significant_cor <- function(.alpha_cor) {
   .alpha_cor %>%
     group_by(model_name, date) %>% 
-    summarize(n_obs_below_0_3 = sum(value < -0.3),
-              n_obs_above_0_3 = sum(value > 0.3),
+    summarize(n_obs_below_0_3 = sum(correlation < -0.3),
+              n_obs_above_0_3 = sum(correlation > 0.3),
               n_obs = n(),
               pct_n_obs_below_0_3 = n_obs_below_0_3 / n_obs,
               pct_n_obs_above_0_3 = n_obs_above_0_3 / n_obs) %>%
@@ -392,7 +434,7 @@ f_significant_cor <- compiler::cmpfun(.f_significant_cor)
 
 # -------------------------------------------------------------------------
 
-.f_plot_ratios <- function(.screening_df){
+.f_plot_ratios <- function(.screening_df) {
   
   title <- paste0("Mean Out/Under-Performance Ratios Using ", 
                   params$window, "-Month Rolling Window based on ", 
@@ -413,7 +455,7 @@ f_significant_cor <- compiler::cmpfun(.f_significant_cor)
   
   screening_name <- paste(deparse(substitute(.screening_df)), params$window, "m", params$datafreq, "data", 
                           params$factor, "factor_model.png", sep = "_")
-  ggsave(p, filename = here("Output", "figures", screening_name), width = 10, height = 8, dpi = 150)
+  ggsave(p, filename = here("Output", "figures", "ratios", screening_name), width = 10, height = 8, dpi = 150)
   
   return(p)
 }
@@ -457,7 +499,7 @@ f_port_permno <- compiler::cmpfun(.f_port_permno)
   date_ymon <- compose(as.Date.yearmon, as.yearmon)
   
   port_ret <- function(.df, .permno, .id_date, .datafreq, .port_name) {
-    test <- .df %>%
+    .df %>%
       filter(if (.datafreq == "monthly") {
         between(date, date_yqtr(.id_date) %m+% months(3),
                 date_yqtr(.id_date) %m+% months(5))
@@ -524,7 +566,7 @@ f_port_growth <- compiler::cmpfun(.f_port_growth)
   
   port_growth_chart <- paste(deparse(substitute(.port)), params$window, "m", params$datafreq, "data",
                              params$factor, "factor_model_port_growth_chart.png", sep = "_")
-  ggsave(p, filename = here("Output", "figures", port_growth_chart), width = 10, height = 8, dpi = 150)
+  ggsave(p, filename = here("Output", "figures", "portfolio", port_growth_chart), width = 10, height = 8, dpi = 150)
   
   return(p)
 }
@@ -535,21 +577,21 @@ f_port_growth_chart <- compiler::cmpfun(.f_port_growth_chart)
 
 .f_port_stats <- function(.port, .model_name) {
   
-  select_port <- ghg_port %>% 
+  select_port <- .port %>% 
     filter(model_name == .model_name)
   
   port_xts <- xts(select_port[, -(1:3)], order.by = select_port$date)
   
-  filename <- paste0(deparse(substitute(.port)), "_", .model_name)
+  filename <- paste(params$datafreq, params$factor, deparse(substitute(.port)), .model_name, sep = "_")
   
   stats <- port_xts %>% table.Stats() 
-  stats %>% write.csv(file = here("output", paste0(filename, "_stats.csv")))
+  stats %>% write.csv(file = here("output", "portfolio", paste0(filename, "_stats.csv")))
   
   sharpe <- port_xts %>% SharpeRatio() 
-  sharpe %>% write.csv(file = here("output", paste0(filename, "_sharpe.csv")))
+  sharpe %>% write.csv(file = here("output", "portfolio", paste0(filename, "_sharpe.csv")))
   
   downside_risk <- port_xts %>% table.DownsideRisk() 
-  downside_risk %>% write.csv(file = here("output", paste0(filename, "_downside_risk.csv")))
+  downside_risk %>% write.csv(file = here("output", "portfolio", paste0(filename, "_downside_risk.csv")))
   
   out <- list(stats, sharpe, downside_risk) %>% `names<-`(c("stats", "sharpe", "downside_risk"))
   
