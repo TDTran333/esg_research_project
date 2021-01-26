@@ -15,15 +15,19 @@ params$factor     <- "six"                     # Factor model : "three" or "six"
 
 # Formatting
 st_options(round.digits = 2, style = "rmarkdown", plain.ascii = FALSE)
-kable <- function(data) {knitr::kable(data, booktabs = TRUE, digits = 2)}
+kable <- function(data, digits = 4) {knitr::kable(data, booktabs = TRUE, digits = digits)}
 
 # Load Results ------------------------------------------------------------
 
 # ghg_results <- readRDS(here("output", "results", "daily_ghg_3f_results.Rds"))
+# env_results <- readRDS(here("output", "results", "daily_env_3f_results.Rds"))
+
 ghg_results <- readRDS(here("output", "results", "daily_ghg_6f_results.Rds"))
 env_results <- readRDS(here("output", "results", "daily_env_6f_results.Rds"))
 
-# ghg_results <- readRDS(here("output", "results", "monthly_ghg_3f_results.Rds")) 
+# ghg_results <- readRDS(here("output", "results", "monthly_ghg_3f_results.Rds"))
+# env_results <- readRDS(here("output", "results", "monthly_env_3f_results.Rds"))
+
 # ghg_results <- readRDS(here("output", "results", "monthly_ghg_6f_results.Rds"))
 # env_results <- readRDS(here("output", "results", "monthly_env_6f_results.Rds"))
 
@@ -41,26 +45,26 @@ ghg_obs <- map2_df(map(ghg_results, "n_obs"), model_names, ~mutate(.x, model_nam
 
 f_plot_obs(ghg_obs)
 ghg_missing_obs <- f_missing_obs(ghg_obs)
-ghg_missing_obs %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_6f_ghg_missing_obs.csv")))
+ghg_missing_obs %>% unclass() %>% write.csv(file = here("output", "obs", paste0(params$datafreq, "_6f_ghg_missing_obs.csv")))
 
 env_obs <- map2_df(map(env_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
 f_plot_obs(env_obs)
 env_missing_obs <- f_missing_obs(env_obs)
-env_missing_obs %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_6f_env_missing_obs.csv")))
+env_missing_obs %>% unclass() %>% write.csv(file = here("output", "obs", paste0(params$datafreq, "_6f_env_missing_obs.csv")))
 
 # Plot Alpha Cor ----------------------------------------------------------
 
-# ghg_results_cor <- readRDS(here("output", "results", "monthly_ghg_6f_results_cor.Rds"))
+# ghg_results_cor <- readRDS(here("output", "results", "daily_ghg_6f_cor.Rds"))
 # ghg_alpha_cor <- map2_df(map(ghg_results_cor, "alpha_cor"), model_names, ~mutate(.x, model_name = .y))
 # ghg_alpha_cor_plots <- map(model_names, ~f_plot_hist_cor(ghg_alpha_cor, .x, "ghg_alpha_cor"))
 # ghg_significant_cor <- f_significant_cor(ghg_alpha_cor)
-# ghg_significant_cor %>% write.csv(file = here("output", paste0(params$datafreq, "_6f_ghg_significant_cor.csv")))
+# ghg_significant_cor %>% write.csv(file = here("output", "correlation", paste0(params$datafreq, "_6f_ghg_significant_cor.csv")))
 # 
-# env_results_cor <- readRDS(here("output", "results", "monthly_env_6f_results_cor.Rds"))
+# env_results_cor <- readRDS(here("output", "results", "daily_env_6f_cor.Rds"))
 # env_alpha_cor <- map2_df(map(env_results_cor, "alpha_cor"), model_names, ~mutate(.x, model_name = .y))
 # env_alpha_cor_plots <- map(model_names, ~f_plot_hist_cor(env_alpha_cor, .x, "env_alpha_cor"))
 # env_significant_cor <- f_significant_cor(env_alpha_cor)
-# env_significant_cor %>% write.csv(file = here("output", paste0(params$datafreq, "_6f_env_significant_cor.csv")))
+# env_significant_cor %>% write.csv(file = here("output", "correlation", paste0(params$datafreq, "_6f_env_significant_cor.csv")))
 
 # Plot Ratios -------------------------------------------------------------
 
@@ -68,12 +72,12 @@ ghg_screening <- map2_df(map(ghg_results, "screening"), model_names, ~mutate(.x,
 
 f_plot_ratios(ghg_screening)
 ghg_screening_stats <- ghg_screening %>% group_by(model_name, name) %>% descr()
-ghg_screening_stats %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_6f_ghg_ratios_stats.csv")))
+ghg_screening_stats %>% unclass() %>% write.csv(file = here("output", "ratios", paste0(params$datafreq, "_6f_ghg_ratios_stats.csv")))
 
 env_screening <- map2_df(map(env_results, "screening"), model_names, ~mutate(.x, model_name = .y))
 f_plot_ratios(env_screening)
 env_screening_stats <- env_screening %>% group_by(model_name, name) %>% descr()
-env_screening_stats %>% unclass() %>% write.csv(file = here("output", paste0(params$datafreq, "_6f_env_ratios_stats.csv")))
+env_screening_stats %>% unclass() %>% write.csv(file = here("output", "ratios", paste0(params$datafreq, "_6f_env_ratios_stats.csv")))
 
 # Portfolio Analysis ------------------------------------------------------
 
@@ -108,9 +112,9 @@ env_brown_port_stats <- f_port_stats(env_port, "Brown Bw")
 env_neutral_port_stats <- f_port_stats(env_port, "Neutral Bw")
 
 
-
-
-# Checking weird output ---------------------------------------------------
+# Checking weird portfolio output -----------------------------------------------
+# It is possible that more than 10 pct of pipos/pineg are at zero. This bugs out slice_max(prop = 0.1).
+# Added an if statement to solve the problem.
 # 
 # env_brown_port_growth %>%
 #   filter(name == "benchmark_minus_20_pct_brown_bw") %>% View()
@@ -144,7 +148,17 @@ env_neutral_port_stats <- f_port_stats(env_port, "Neutral Bw")
 # tidy_obs_brown_bw_daily <- tidy_obs_brown_bw_daily %>% mutate(model_name = "brown")
 # f_missing_obs(tidy_obs_brown_bw_daily)
 # 
+# permno_brown_bw_daily <- names(alpha_screen_brown_bw_daily$n)
+# 
 # port_permno_brown_bw_daily <- f_port_permno(alpha_screen_brown_bw_daily, ghg_id_daily$brown, id_date)
 # port_ret_brown_bw_daily <- f_port_ret(sp_df_daily, port_permno_brown_bw_daily, id_date, "daily")
 # 
-# port_ret_brown_bw_daily %>% View()
+# alpha_screen_brown_bw_daily %>% 
+#   as_tibble() %>%
+#   select(alpha, pipos, pineg) %>% 
+#   mutate(permno = permno_brown_bw_daily) %>%
+#   slice_max(pipos, n = if(sum(.$pipos > 0) < length(permno_brown_bw_daily)) sum(.$pipos > 0) else length(permno_brown_bw_daily) / 10)
+    
+
+
+

@@ -106,13 +106,14 @@ f_process_model <- function(.df, .factor_df, .factor_model, .id, .id_name, .date
   
   tidy_n_obs     <- f_tidy_n_obs(tmp1, dates$id_date)
   tidy_screening <- f_tidy_screening(tmp3, dates$id_date)
+  tidy_alpha_cor  <- if (isTRUE(.run_cor)) {tmp2 %>% map_dfr(~bind_rows(.x))}
   tidy_port_ret  <- if (isTRUE(.run_port)) {tmp5 %>% map_dfr(~bind_rows(.x))}
   
   tidy_results <- list(dates$id_date, tidy_n_obs, tidy_screening) %>%
     `names<-`(c("date", "n_obs", "screening"))
 
   if (isTRUE(.run_cor)) {
-    tidy_results   <- append(tidy_results, list(tmp2) %>% `names<-`(c("alpha_cor")))
+    tidy_results   <- append(tidy_results, list(tidy_alpha_cor) %>% `names<-`(c("alpha_cor")))
   }
   
   if (isTRUE(.run_port)) {
@@ -138,8 +139,7 @@ f_run_model <- partial(f_process_model,
 ghg_results <- env_results <- list()
 ghg_results[paste0(esg_group, "_bw")] <- map(esg_group, ~f_run_model(.id = ghg_id[[.x]], 
                                                                       .id_name = paste0("ghg_id['", .x, "']"), 
-                                                                      .model = "bw",
-                                                                      .run_cor = FALSE))
+                                                                      .model = "bw"))
 
 ghg_results[paste0(esg_group, "_fw")] <- map(esg_group, ~f_run_model(.id = ghg_id[[.x]], 
                                                                      .id_name = paste0("ghg_id['", .x, "']"), 
@@ -162,75 +162,78 @@ glimpse(env_results)
 
 # Note: Splitted out the correlation function because of file size.
 
-# f_run_cor <- function(.df, .factor_df, .factor_model, .id, .id_name, .date, .model,
-#                             .datafreq, .method, .window, .verbose = TRUE) {
-#   
-#   .factor_model = match.arg(.factor_model, c("three", "six"))
-#   .model        = match.arg(.model, c("bw", "fw"))
-#   .datafreq     = match.arg(.datafreq, c("monthly", "daily"))
-#   .method       = match.arg(.method, c("pearson", "kendall", "spearman"))
-#   
-#   # Create Dates
-#   dates <- f_create_dates(.date, .window, .model, .datafreq)
-#   
-#   model_name <- paste(.model, .window, "m_window", .factor_model, 
-#                       "factor_model", .datafreq, "data", .id_name, sep = "_")
-#   
-#   if (isTRUE(.verbose)) {message(paste0("Model: ", model_name, "."))}
-#   
-#   tmp <- list()
-#   
-#   for (i in seq_along(dates$id_date)) {
-#     
-#     if (isTRUE(.verbose)) {
-#       message(paste("Analyzing", dates$id_date[i]), ". ",
-#               "Completed: ", i, " out of ", length(dates$id_date), ".")
-#     }
-#     
-#     # Alpha Screen
-#     ret_mat <- f_ret_mat(.df, .id, dates$id_date[i], dates$start_date[i], dates$end_date[i])
-#     factor_mat <- f_factor_mat(.factor_df, dates$start_date[i], dates$end_date[i])
-#     alpha_cor <- f_alpha_cor(ret_mat, factor_mat, dates$id_date[i], .method = .method)
-# 
-#     # Outputs
-#     tmp <- append(tmp, list(alpha_cor))
-#   }
-#   
-#   if (isTRUE(.verbose)) {message("Completed!")}
-#   
-#   names(tmp) <- dates$id_date
-#   out <- list(tmp) %>% `names<-`(c("alpha_cor"))
-#   
-#   return(out)
-# }
-# 
-# date_input <- ghg_df %>% select(date) %>% distinct() %>% pluck()
-# 
-# run_cor <- partial(f_run_cor,
-#                    .df           = sp_df,
-#                    .factor       = if (params$factor == "six") {factor_df} else {factor_df[, 1:4]},
-#                    .factor_model = params$factor,
-#                    .date         = date_input,
-#                    .datafreq     = params$datafreq,
-#                    .method       = "pearson",
-#                    .window       = params$window)
-# 
-# ghg_results_cor <- env_results_cor <- list()
-# ghg_results_cor[paste0(esg_group, "_bw")] <- map(esg_group, ~run_cor(.id = ghg_id[[.x]], 
-#                                                                      .id_name = paste0("ghg_id['", .x, "']"), 
-#                                                                      .model = "bw"                                                                      ))
-# 
-# ghg_results_cor[paste0(esg_group, "_fw")] <- map(esg_group, ~run_cor(.id = ghg_id[[.x]], 
-#                                                                      .id_name = paste0("ghg_id['", .x, "']"), 
-#                                                                      .model = "fw"))
-# 
-# env_results_cor[paste0(esg_group, "_bw")] <- map(esg_group, ~run_cor(.id = env_id[[.x]], 
-#                                                                      .id_name = paste0("env_id['", .x, "']"), 
-#                                                                      .model = "bw"))
-# 
-# env_results_cor[paste0(esg_group, "_fw")] <- map(esg_group, ~run_cor(.id = env_id[[.x]], 
-#                                                                      .id_name = paste0("env_id['", .x, "']"), 
-#                                                                      .model = "fw"))
-# 
-# glimpse(ghg_results_cor)
-# glimpse(env_results_cor)
+f_run_cor <- function(.df, .factor_df, .factor_model, .id, .id_name, .date, .model,
+                            .datafreq, .method, .window, .verbose = TRUE) {
+
+  .factor_model = match.arg(.factor_model, c("three", "six"))
+  .model        = match.arg(.model, c("bw", "fw"))
+  .datafreq     = match.arg(.datafreq, c("monthly", "daily"))
+  .method       = match.arg(.method, c("pearson", "kendall", "spearman"))
+
+  # Create Dates
+  dates <- f_create_dates(.date, .window, .model, .datafreq)
+
+  model_name <- paste(.model, .window, "m_window", .factor_model,
+                      "factor_model", .datafreq, "data", .id_name, sep = "_")
+
+  if (isTRUE(.verbose)) {message(paste0("Model: ", model_name, "."))}
+
+  tmp <- list()
+
+  for (i in seq_along(dates$id_date)) {
+
+    if (isTRUE(.verbose)) {
+      message(paste("Analyzing", dates$id_date[i]), ". ",
+              "Completed: ", i, " out of ", length(dates$id_date), ".")
+    }
+
+    # Alpha Screen
+    ret_mat <- f_ret_mat(.df, .id, dates$id_date[i], dates$start_date[i], dates$end_date[i])
+    factor_mat <- f_factor_mat(.factor_df, dates$start_date[i], dates$end_date[i])
+    alpha_cor <- f_alpha_cor(ret_mat, factor_mat, dates$id_date[i], .method = .method)
+
+    # Outputs
+    tmp <- append(tmp, list(alpha_cor))
+  }
+
+  if (isTRUE(.verbose)) {message("Completed!")}
+
+  names(tmp) <- dates$id_date
+  out <- list(tmp %>% map_dfr(~bind_rows(.x))) %>% `names<-`(c("alpha_cor"))
+
+  return(out)
+}
+
+date_input <- ghg_df %>% select(date) %>% distinct() %>% pluck()
+
+run_cor <- partial(f_run_cor,
+                   .df           = sp_df,
+                   .factor       = if (params$factor == "six") {factor_df} else {factor_df[, 1:4]},
+                   .factor_model = params$factor,
+                   .date         = date_input,
+                   .datafreq     = params$datafreq,
+                   .method       = "pearson",
+                   .window       = params$window)
+
+ghg_results_cor <- env_results_cor <- list()
+ghg_results_cor[paste0(esg_group, "_bw")] <- map(esg_group, ~run_cor(.id = ghg_id[[.x]],
+                                                                     .id_name = paste0("ghg_id['", .x, "']"),
+                                                                     .model = "bw"))
+
+ghg_results_cor[paste0(esg_group, "_fw")] <- map(esg_group, ~run_cor(.id = ghg_id[[.x]],
+                                                                     .id_name = paste0("ghg_id['", .x, "']"),
+                                                                     .model = "fw"))
+
+env_results_cor[paste0(esg_group, "_bw")] <- map(esg_group, ~run_cor(.id = env_id[[.x]],
+                                                                     .id_name = paste0("env_id['", .x, "']"),
+                                                                     .model = "bw"))
+
+env_results_cor[paste0(esg_group, "_fw")] <- map(esg_group, ~run_cor(.id = env_id[[.x]],
+                                                                     .id_name = paste0("env_id['", .x, "']"),
+                                                                     .model = "fw"))
+
+glimpse(ghg_results_cor)
+glimpse(env_results_cor)
+
+saveRDS(ghg_results_cor, here("output", "results", "daily_ghg_6f_cor.Rds"))
+saveRDS(env_results_cor, here("output", "results", "daily_env_6f_cor.Rds"))

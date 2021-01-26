@@ -440,13 +440,16 @@ f_significant_cor <- compiler::cmpfun(.f_significant_cor)
                   params$window, "-Month Rolling Window based on ", 
                   deparse(substitute(.screening_df)), ".")
   
+  subtitle <- paste0("Backward-Looking and Forward-Looking for Using a ",
+                     str_to_title(params$factor), "-Factor Model and ", 
+                     str_to_title(params$datafreq), " Data.")
+  
   p <- .screening_df %>%
     ggplot(aes(date, value, color = name)) +
     geom_line(size = 1.5) +
     facet_wrap(~ model_name, ncol = 2, dir = "h", scale = "free_x") +
     labs(title = title,
-         subtitle = paste0("Backward-Looking and Forward-Looking for Green, Brown and Neutral Firms Using ",
-                           params$factor, "-factor model."),
+         subtitle = subtitle,
          x = "Date",
          y = "Percent",
          color = "Ratios") +
@@ -472,9 +475,9 @@ f_plot_ratios <- compiler::cmpfun(.f_plot_ratios)
     mutate(permno = id_names)
   
   top_10 <- permno %>% slice_max(pipos, n = 10)
-  top_10_pct <- permno %>% slice_max(pipos, prop = .10)
+  top_10_pct <- permno %>% slice_max(pipos, n = if (sum(.$pipos > 0) < length(id_names)) sum(.$pipos > 0) else length(id_names) / 10)
   bottom_10 <- permno %>% slice_max(pineg, n = 10)
-  bottom_10_pct <- permno %>% slice_max(pineg, prop = .10)
+  bottom_10_pct <- permno %>% slice_max(pineg, n = if (sum(.$pineg > 0) < length(id_names)) sum(.$pineg > 0) else length(id_names) / 10)
   top_10_alpha <- permno %>% slice_max(alpha, n = 10)
   top_10_alpha_pct <- permno %>% slice_max(alpha, prop = .10)
   bottom_10_alpha <- permno %>% slice_min(alpha, n = 10)
