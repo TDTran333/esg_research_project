@@ -12,10 +12,9 @@ shhh(require(lubridate))               # Date management
 # 7. f_ret_mat:             Generate ret_mat from data_df
 # 8. f_factor_mat:          Generate factor_mat from factor_df
 # 9. alpha screen:          Alpha screening function
-
 # 11. f_tbl_screening:      Summary table of probability ratios
 # 12. f_screenplot:         Create screenplot
-# 13. f_tidy_screening:     Create tidy df of pi results for plotting
+# 13. f_avg_ratios:         Calc average screening ratios
 # 14. f_tidy_n_obs:         Create tidy df of concordant obs for plotting
 # 15. f_tidy_alpha_cor:     Create tidy df of alpha cor plotting
 # 16. f_plot_obs:           Plot histograms of concordant obs
@@ -28,7 +27,6 @@ shhh(require(lubridate))               # Date management
 # 23. f_port_growth         Calculate portfolio growth
 # 24. f_port_growth_chart:  Chart portfolios
 # 25: f_port_stats:         Portfolio statistics
-
 
 # -------------------------------------------------------------------------
 
@@ -260,21 +258,17 @@ f_alpha_cor <- compiler::cmpfun(.f_alpha_cor)
   
   .df <- .df %>%
     as_tibble() %>%
-    select(alpha, pizero, pipos, pineg)
+    select(alpha, pizero, pipos, pineg) %>% 
+    drop_na()
 
-  pos    <- order(.df$alpha, decreasing = TRUE)
-  n      <- nrow(.df)
-  ngroup <- floor(n / .nblock)
-  tbl    <- matrix(data = NA, nrow = .nblock, ncol = 4)
+  pos <- order(.df$alpha, decreasing = TRUE)
+  n   <- nrow(.df)
+  idx <- split(pos, ceiling(seq_along(pos)/(n/params$nblock)))
+  tbl <- matrix(data = NA, nrow = .nblock, ncol = 4)
   
   for (i in 1:.nblock) {
-    idx <- pos[((i - 1) * ngroup + 1):(i * ngroup)]
-    if (i == .nblock) {
-      idx <- pos[((i - 1) * ngroup + 1):n]
-    }
-    idx           <- idx[!is.na(idx)]
-    tbl[i, 1]     <- mean(.df$alpha[idx])
-    tbl[i, 2:4]   <- colMeans(.df[idx, c("pipos", "pizero", "pineg")])
+    tbl[i, 1]     <- mean(.df$alpha[idx[[i]]])
+    tbl[i, 2:4]   <- colMeans(.df[idx[[i]], c("pipos", "pizero", "pineg")])
     colnames(tbl) <- c("alpha", "pipos", "pizero", "pineg")
   }
   if (do_norm) {
@@ -327,25 +321,16 @@ f_screenplot <- compiler::cmpfun(.f_screenplot)
 
 # -------------------------------------------------------------------------
 
-.f_tidy_screening <- function(.tbl_screening, .id_date) {
-  mean_pi <- function(.tbl_screening) {
-    .tbl_screening %>%
-      summarize(mean_pipos = mean(pipos, na.rm = TRUE),
-                mean_pineg = mean(pineg, na.rm = TRUE))
-  }
+.f_avg_ratios <- function(.alpha_screen, .id_date) {
   
-  .tbl_screening %>%
-    map(mean_pi) %>%
-    transpose() %>%
-    map(rbind) %>% 
-    unlist() %>% 
-    matrix(byrow=T, ncol = 2) %>% 
-    `colnames<-`(c("pipos", "pineg")) %>%
-    as_tibble() %>% 
-    mutate(date = .id_date) %>%
-    pivot_longer(-date)
+  .alpha_screen %>% 
+    as_tibble() %>%
+    select(alpha, pizero, pipos, pineg) %>% 
+    summarise(across(everything(), ~ mean(.x, na.rm = TRUE))) %>% 
+    mutate(date = .id_date)
 }
-f_tidy_screening <- compiler::cmpfun(.f_tidy_screening)
+
+f_avg_ratios <- compiler::cmpfun(.f_avg_ratios)
 
 # -------------------------------------------------------------------------
 
@@ -445,6 +430,7 @@ f_significant_cor <- compiler::cmpfun(.f_significant_cor)
                      str_to_title(params$datafreq), " Data.")
   
   p <- .screening_df %>%
+    filter(name %in% c("pipos", "pineg")) %>% 
     ggplot(aes(date, value, color = name)) +
     geom_line(size = 1.5) +
     facet_wrap(~ model_name, ncol = 2, dir = "h", scale = "free_x") +
@@ -454,7 +440,8 @@ f_significant_cor <- compiler::cmpfun(.f_significant_cor)
          y = "Percent",
          color = "Ratios") +
     scale_y_continuous(labels = percent) +
-    scale_x_yearqtr(format = "%Y-Q%q")
+    scale_x_yearqtr(format = "%Y-Q%q") +
+    geom_smooth(method = "lm", se = FALSE)
   
   screening_name <- paste(deparse(substitute(.screening_df)), params$window, "m", params$datafreq, "data", 
                           params$factor, "factor_model.png", sep = "_")
@@ -469,15 +456,20 @@ f_plot_ratios <- compiler::cmpfun(.f_plot_ratios)
 .f_port_permno <- function(.alpha_screen, .id, .id_date) {
   id_names <- names(.alpha_screen$n)
   
+  
   permno <- .alpha_screen %>%
     as_tibble() %>%
     select(alpha, pipos, pineg) %>% 
     mutate(permno = id_names)
-  
+
   top_10 <- permno %>% slice_max(pipos, n = 10)
-  top_10_pct <- permno %>% slice_max(pipos, n = if (sum(.$pipos > 0) < length(id_names)) sum(.$pipos > 0) else length(id_names) / 10)
+  top_10_pct <- permno %>% slice_max(pipos, n = ifelse((sum(.$pipos > 0, na.rm = TRUE) < length(id_names)), 
+                                                       sum(.$pipos > 0, na.rm = TRUE), 
+                                                       length(id_names) / 10))
   bottom_10 <- permno %>% slice_max(pineg, n = 10)
-  bottom_10_pct <- permno %>% slice_max(pineg, n = if (sum(.$pineg > 0) < length(id_names)) sum(.$pineg > 0) else length(id_names) / 10)
+  bottom_10_pct <- permno %>% slice_max(pineg, n = ifelse((sum(.$pineg > 0, na.rm = TRUE) < length(id_names)), 
+                                                          sum(.$pineg > 0, na.rm = TRUE), 
+                                                          length(id_names) / 10))
   top_10_alpha <- permno %>% slice_max(alpha, n = 10)
   top_10_alpha_pct <- permno %>% slice_max(alpha, prop = .10)
   bottom_10_alpha <- permno %>% slice_min(alpha, n = 10)
@@ -553,9 +545,10 @@ f_port_growth <- compiler::cmpfun(.f_port_growth)
 
 # -------------------------------------------------------------------------
 
-.f_port_growth_chart <- function(.port, .esg_name) {
+.f_port_growth_chart <- function(.port, .esg_name, .esg_var) {
   
-  title <- paste0("Portfolio Growth with ", str_to_title(params$datafreq), " Data Using ", .esg_name, " Firms Universe.")
+  title <- paste0("Portfolio Growth with ", str_to_title(params$datafreq), " Data Using ", 
+                  .esg_name, " Firms Universe Based on ", .esg_var, " ESG Variable.")
   
   p <- .port %>% 
     ggplot(aes(date, value, color = name)) +
@@ -603,5 +596,4 @@ f_port_growth_chart <- compiler::cmpfun(.f_port_growth_chart)
 f_port_stats <- compiler::cmpfun(.f_port_stats)
 
 # -------------------------------------------------------------------------
-
 

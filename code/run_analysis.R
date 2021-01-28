@@ -11,7 +11,7 @@ params$subDir     <- paste0(first(params$sample), "-", last(params$sample))
 params$datafreq   <- "daily"                 # Data frequency : "monthly" or "daily"       
 params$window     <- 36                        # Rolling window in # of months
 params$nblock     <- 20                        # Number of blocks in screenplots
-params$factor     <- "six"                     # Factor model : "three" or "six"
+params$factor     <- "three"                     # Factor model : "three" or "six"
 
 # Formatting
 st_options(round.digits = 2, style = "rmarkdown", plain.ascii = FALSE)
@@ -77,6 +77,7 @@ f_process_model <- function(.df, .factor_df, .factor_model, .id, .id_name, .date
     
     # Table for Screening Plot
     tbl_screening <- f_tbl_screening(alpha_screen, .nblock)
+    avg_ratios <- f_avg_ratios(alpha_screen, dates$id_date[i])
     
     # Create Screening Plot
     fig_title <- paste(model_name, dates$id_date[i], sep = "_")
@@ -93,24 +94,20 @@ f_process_model <- function(.df, .factor_df, .factor_model, .id, .id_name, .date
     # Outputs
     tmp1 <- append(tmp1, list(alpha_screen))
     tmp2 <- if (isTRUE(.run_cor)) {append(tmp2, list(alpha_cor))}
-    tmp3 <- append(tmp3, list(tbl_screening))
+    tmp3 <- append(tmp3, list(avg_ratios))
     tmp4 <- if (isTRUE(.run_port)) {append(tmp4, list(port_permno))}
     tmp5 <- if (isTRUE(.run_port)) {append(tmp5, list(port_ret))}
   }
   
   if (isTRUE(.verbose)) {message("Completed!")}
   
-  names(tmp1) <- names(tmp3) <- dates$id_date
-  if (isTRUE(.run_cor)) {names(tmp2) <- dates$id_date}
-  if (isTRUE(.run_port)) {names(tmp4) <- names(tmp5) <- dates$id_date}
-  
   tidy_n_obs     <- f_tidy_n_obs(tmp1, dates$id_date)
-  tidy_screening <- f_tidy_screening(tmp3, dates$id_date)
-  tidy_alpha_cor  <- if (isTRUE(.run_cor)) {tmp2 %>% map_dfr(~bind_rows(.x))}
+  tidy_ratios    <- tmp3 %>% map_dfr(~bind_rows(.x)) %>% pivot_longer(-date)
+  tidy_alpha_cor <- if (isTRUE(.run_cor)) {tmp2 %>% map_dfr(~bind_rows(.x))}
   tidy_port_ret  <- if (isTRUE(.run_port)) {tmp5 %>% map_dfr(~bind_rows(.x))}
   
-  tidy_results <- list(dates$id_date, tidy_n_obs, tidy_screening) %>%
-    `names<-`(c("date", "n_obs", "screening"))
+  tidy_results <- list(dates$id_date, tidy_n_obs, tidy_ratios) %>%
+    `names<-`(c("date", "n_obs", "avg_ratios"))
 
   if (isTRUE(.run_cor)) {
     tidy_results   <- append(tidy_results, list(tidy_alpha_cor) %>% `names<-`(c("alpha_cor")))
