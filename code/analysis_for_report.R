@@ -17,6 +17,57 @@ params$factor     <- "six"                     # Factor model : "three" or "six"
 st_options(round.digits = 2, style = "rmarkdown", plain.ascii = FALSE)
 kable <- function(data, digits = 4) {knitr::kable(data, booktabs = TRUE, digits = digits)}
 
+# Data on firms -----------------------------------------------------------
+
+data_all_sp <- readRDS(here("data", "all", "monthly_data_sp.Rds"))
+
+firms_ghg <- data_all_sp %>%
+  group_by(year = year(date)) %>%
+  mutate(n_obs = n(),
+         n_firms = n_distinct(permno)) %>% 
+  ungroup() %>% 
+  filter(!is.na(ghg)) %>%
+  group_by(year) %>% 
+  mutate(n_obs_ghg = n(),
+         n_firms_ghg_data = n_distinct(permno),
+         pct_firms_ghg_data = (n_firms_ghg_data / n_firms) * 100)
+
+firms_ghg_table <- firms_ghg %>% 
+  select(year, n_obs, n_obs_ghg, n_firms, n_firms_ghg_data, pct_firms_ghg_data) %>%
+  group_by(year) %>% 
+  summarize(n_obs         = mean(n_obs),
+            n_obs_ghg     = mean(n_obs_ghg),
+            n_firms       = mean(n_firms),
+            n_firms_ghg   = mean(n_firms_ghg_data),
+            pct_firms_ghg = mean(pct_firms_ghg_data))
+
+firms_ghg_table %>% 
+  kable()
+
+firms_env <- data_all_sp %>%
+  group_by(year = year(date)) %>%
+  mutate(n_obs = n(),
+         n_firms = n_distinct(permno)) %>% 
+  ungroup() %>% 
+  filter(!is.na(envscore)) %>%
+  group_by(year) %>% 
+  mutate(n_obs_env = n(),
+         n_firms_env_data = n_distinct(permno),
+         pct_firms_env_data = (n_firms_env_data / n_firms) * 100)
+
+firms_env_table <- firms_env %>% 
+  select(year, n_obs, n_obs_env, n_firms, n_firms_env_data, pct_firms_env_data) %>%
+  group_by(year) %>% 
+  summarize(n_obs         = mean(n_obs),
+            n_obs_env     = mean(n_obs_env),
+            n_firms       = mean(n_firms),
+            n_firms_env   = mean(n_firms_env_data),
+            pct_firms_env = mean(pct_firms_env_data))
+
+firms_env_table %>% 
+  kable()
+
+
 # Load Results ------------------------------------------------------------
 
 ghg_results <- readRDS(here("output", "results", "monthly_ghg_6f_results.Rds"))

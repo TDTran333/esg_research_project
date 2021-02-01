@@ -5,7 +5,7 @@ library(here)
 # Options -----------------------------------------------------------------
 
 start <- "2009"
-end   <- "2017"
+end   <- "2018"
 
 mainDir <- here("data")
 subDir <- paste0(start, "-", end)
@@ -122,4 +122,4 @@ tbl[4,5] <- df_sp %>% filter(!is.na(spmim)) %>% select(permno) %>% dstnct_cnt_ma
 tbl[5,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp023)) %>% select(permno) %>% dstnct_cnt_mat()
 tbl[6,5] <- df_sp %>% filter(!is.na(spmim), !is.na(enerdp096)) %>% select(permno) %>% dstnct_cnt_mat()
 
-write.csv(tbl, file = here("code", "clean_data", "mthly_summ_tbl.csv"))
+write.csv(tbl, file = here("code", "clean_data", "mthly_summ_tbl_2009_2018.csv"))
