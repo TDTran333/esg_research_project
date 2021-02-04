@@ -84,9 +84,9 @@ f_create_esg_type <- compiler::cmpfun(.f_create_esg_type)
     scale_fill_manual(values = color) +
     scale_x_continuous(breaks = params$sample_per) +
     labs(x = "Year",
-         y = "# of firms",
+         y = "# of Firms",
          fill = "Esg group",
-         title = paste0("Average Number of Firms Observations for ", .esg_var, ".") ,
+         title = paste0("Average Number of Firms for ", .esg_var, ".") ,
          subtitle = "Brown, Green, Neutral and Undisclosed.")
   
   firms_name <- paste(deparse(substitute(.df)), "avg_number_of_firms.png", sep = "_")

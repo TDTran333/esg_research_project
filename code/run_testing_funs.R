@@ -9,7 +9,7 @@ source(here::here("code", "source.R"))
 
 params            <- list()         
 params$control    <- list(nCore = 3)           # Number of core and other controls
-params$sample_per <- 2009:2017                 # Sample period
+params$sample_per <- 2009:2018                 # Sample period
 params$subDir     <- paste0(first(params$sample), "-", last(params$sample))
 params$window     <- 36                        # Rolling window in # of months
 params$nblock     <- 20                        # Number of blocks in screenplots
@@ -33,24 +33,24 @@ factor_df_daily <- readRDS(here("data", params$subDir, "daily_factor.rds"))
 ghg_df_monthly <- sp_df_monthly %>% f_create_esg_type(.esg_var = "ghg", "monthly", params$window)
 env_df_monthly <- sp_df_monthly %>% f_create_esg_type(.esg_var = "envscore", "monthly", params$window)
 
-ghg_df_monthly %>% descr() %>% write.csv(file = here("output", "firms", "ghg_monthly_stats.csv"))
-env_df_monthly %>% descr() %>% write.csv(file = here("output", "firms", "env_monthly_stats.csv"))
+# ghg_df_monthly %>% descr() %>% write.csv(file = here("output", "firms", "ghg_monthly_stats.csv"))
+# env_df_monthly %>% descr() %>% write.csv(file = here("output", "firms", "env_monthly_stats.csv"))
 
 ghg_df_daily <- sp_df_daily %>% f_create_esg_type(.esg_var = "ghg", "daily", params$window)
 env_df_daily <- sp_df_daily %>% f_create_esg_type(.esg_var = "envscore", "daily", params$window)
 
-ghg_df_daily %>% descr() %>% write.csv(file = here("output", "firms", "ghg_daily_stats.csv"))
-env_df_daily %>% descr() %>% write.csv(file = here("output", "firms", "env_daily_stats.csv"))
+# ghg_df_daily %>% descr() %>% write.csv(file = here("output", "firms", "ghg_daily_stats.csv"))
+# env_df_daily %>% descr() %>% write.csv(file = here("output", "firms", "env_daily_stats.csv"))
 
 # 2. f_plot_firms ---------------------------------------------------------
 
 # f_plot_firms(.df, .esg_var). Note: filename based on first argument. Do not use pipe.
 
-f_plot_firms(ghg_df_monthly, "GHG", "monthly")
-f_plot_firms(env_df_monthly, "Env Score", "monthly")
+f_plot_firms(ghg_df_monthly, "GHG")
+f_plot_firms(env_df_monthly, "Env Score")
 
-f_plot_firms(ghg_df_daily, "GHG", "daily")
-f_plot_firms(env_df_daily, "Env Score", "daily")
+f_plot_firms(ghg_df_daily, "GHG")
+f_plot_firms(env_df_daily, "Env Score")
 
 # 3. f_firms_count --------------------------------------------------------
 
@@ -83,8 +83,6 @@ env_tm_daily <- f_create_trans_mat(env_df_daily)
 
 ghg_tm_daily %>% kable()
 env_tm_daily %>% kable()
-
-source(here::here("code", "source.R"))
 
 # 5. f_create_id ----------------------------------------------------------
 
