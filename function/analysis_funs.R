@@ -84,9 +84,9 @@ f_create_esg_type <- compiler::cmpfun(.f_create_esg_type)
     scale_fill_manual(values = color) +
     scale_x_continuous(breaks = params$sample_per) +
     labs(x = "Year",
-         y = "# of Firms",
-         fill = "Esg group",
-         title = paste0("Average Number of Firms for ", .esg_var, ".") ,
+         y = "# of firms",
+         fill = "ESG group",
+         title = paste0("ESG groups based on ", .esg_var, ".") ,
          subtitle = "Brown, Green, Neutral and Undisclosed.")
   
   firms_name <- paste(deparse(substitute(.df)), "avg_number_of_firms.png", sep = "_")
@@ -354,7 +354,7 @@ f_tidy_n_obs <- compiler::cmpfun(.f_tidy_n_obs)
     ggplot(aes(average)) +
     geom_histogram(bins = 10) +
     facet_wrap(~ model_name, scale = "free", ncol = 3, dir = "v") +
-    labs(title = paste0("Percent Concordant Observations for ", deparse(substitute(.obs_df)), ".")) + 
+    labs(title = paste0("Percentage of concordant observations for ", deparse(substitute(.obs_df)), ".")) + 
     scale_x_continuous(labels = percent)
   
   obs_name <- paste(deparse(substitute(.obs_df)), params$window, "m", 
@@ -391,7 +391,7 @@ f_missing_obs <- compiler::cmpfun(.f_missing_obs)
     facet_wrap(~ factor(date)) +
     geom_vline(xintercept = -0.3, lty = "dashed") +
     geom_vline(xintercept = 0.3, lty = "dashed") + 
-    labs(title = paste0("Correlations of Alphas for ", .model_name, " from ", .esg_name, "."),
+    labs(title = paste0("Correlations of alphas for ", .model_name, " from ", .esg_name, "."),
          subtitle = "Dashed lines correspond to -0.3 and +0.3")
   
   alpha_cor_name <- paste(.esg_name, .model_name, params$window, "m", params$datafreq, "data", 
@@ -421,16 +421,16 @@ f_significant_cor <- compiler::cmpfun(.f_significant_cor)
 
 .f_plot_ratios <- function(.screening_df) {
   
-  title <- paste0("Mean Out/Under-Performance Ratios Using ", 
-                  params$window, "-Month Rolling Window based on ", 
+  title <- paste0("Mean out/under-performance ratios using ", 
+                  params$window, "-month rolling window based on ", 
                   deparse(substitute(.screening_df)), ".")
   
-  subtitle <- paste0("Backward-Looking and Forward-Looking for Using a ",
-                     str_to_title(params$factor), "-Factor Model and ", 
-                     str_to_title(params$datafreq), " Data.")
+  subtitle <- paste0("Backward-looking and forward-looking using a ",
+                     params$factor, "-factor model and ", 
+                     params$datafreq, " data.")
   
   p <- .screening_df %>%
-    filter(name %in% c("pipos", "pineg")) %>% 
+    filter(name %in% c("pipos", "pineg")) %>%
     ggplot(aes(date, value, color = name)) +
     geom_line(size = 1.5) +
     facet_wrap(~ model_name, ncol = 2, dir = "h", scale = "free_x") +
@@ -547,8 +547,8 @@ f_port_growth <- compiler::cmpfun(.f_port_growth)
 
 .f_port_growth_chart <- function(.port, .esg_name, .esg_var) {
   
-  title <- paste0("Portfolio Growth with ", str_to_title(params$datafreq), " Data Using ", 
-                  .esg_name, " Firms Universe Based on ", .esg_var, " ESG Variable.")
+  title <- paste0("Portfolio growth with ", params$datafreq, " data using ", 
+                  .esg_name, " firms universe based on ", .esg_var, " ESG variable.")
   
   p <- .port %>% 
     ggplot(aes(date, value, color = name)) +

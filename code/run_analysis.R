@@ -11,7 +11,7 @@ params$subDir     <- paste0(first(params$sample), "-", last(params$sample))
 params$datafreq   <- "monthly"                 # Data frequency : "monthly" or "daily"       
 params$window     <- 36                        # Rolling window in # of months
 params$nblock     <- 20                        # Number of blocks in screenplots
-params$factor     <- "three"                     # Factor model : "three" or "six"
+params$factor     <- "six"                     # Factor model : "three" or "six"
 
 # Formatting
 st_options(round.digits = 2, style = "rmarkdown", plain.ascii = FALSE)
@@ -155,8 +155,8 @@ env_results[paste0(esg_group, "_fw")] <- map(esg_group, ~f_run_model(.id = env_i
 glimpse(ghg_results)
 glimpse(env_results)
 
-saveRDS(ghg_results, here("output", "results", "monthly_ghg_3f_results2.Rds"))
-saveRDS(env_results, here("output", "results", "monthly_env_3f_results2.Rds"))
+# saveRDS(ghg_results, here("output", "results", "monthly_ghg_3f_results2.Rds"))
+# saveRDS(env_results, here("output", "results", "monthly_env_3f_results2.Rds"))
 
 # -------------------------------------------------------------------------
 
@@ -235,5 +235,5 @@ env_results_cor[paste0(esg_group, "_fw")] <- map(esg_group, ~run_cor(.id = env_i
 glimpse(ghg_results_cor)
 glimpse(env_results_cor)
 
-saveRDS(ghg_results_cor, here("output", "results", "monthly_ghg_3f_cor.Rds"))
-saveRDS(env_results_cor, here("output", "results", "monthly_env_3f_cor.Rds"))
+# saveRDS(ghg_results_cor, here("output", "results", "monthly_ghg_3f_cor.Rds"))
+# saveRDS(env_results_cor, here("output", "results", "monthly_env_3f_cor.Rds"))
