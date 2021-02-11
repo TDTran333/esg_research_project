@@ -28,7 +28,6 @@ model_names <- str_to_title(gsub("_", " ", names(ghg_results)))
 
 # Plot Obs ----------------------------------------------------------------
 
-# 
 # ghg_obs <- map2_df(map(ghg_results, "n_obs"), model_names, ~mutate(.x, model_name = .y))
 # 
 # f_plot_obs(ghg_obs)
@@ -77,6 +76,8 @@ model_names <- str_to_title(gsub("_", " ", names(ghg_results)))
 ghg_port <- map2_df(map(ghg_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
   pivot_wider(., names_from = port, values_from = ret)
 
+ghg_port
+
 ghg_green_port_growth <- f_port_growth(ghg_port, "Green Bw")
 ghg_brown_port_growth <- f_port_growth(ghg_port, "Brown Bw")
 ghg_neutral_port_growth <- f_port_growth(ghg_port, "Neutral Bw")
@@ -103,55 +104,3 @@ f_port_growth_chart(env_neutral_port_growth, "Neutral", "Env Score")
 env_green_port_stats <- f_port_stats(env_port, "Green Bw")
 env_brown_port_stats <- f_port_stats(env_port, "Brown Bw")
 env_neutral_port_stats <- f_port_stats(env_port, "Neutral Bw")
-    
-ghg_port
-
-select_port <- ghg_port %>% filter(model_name == "Green Bw")
-
-port_xts <- xts(select_port[, -(1:3)], order.by = select_port$date)
-port_xts %>% table.Stats()
-port_xts %>% SharpeRatio()
-port_xts %>% table.CalendarReturns()
-port_xts %>% Return.cumulative()
-port_xts %>% Return.annualized()
-port_xts %>% StdDev.annualized()
-port_xts %>% SharpeRatio.annualized()
-port_xts %>% skewness()
-port_xts %>% kurtosis()
-port_xts %>% VaR()
-port_xts %>% ETL()
-port_xts %>% maxDrawdown()
-port_xts_2 %>% table.Arbitrary(metrics = c("Return.cumulative", 
-                                         "Return.annualized", 
-                                         "StdDev.annualized",
-                                         "SharpeRatio.annualized",
-                                         "skewness",
-                                         "kurtosis",
-                                         "VaR",
-                                         "ETL",
-                                         "maxDrawdown"), 
-                             metricsNames = c("Cumulative return", 
-                                              "Annualized return",
-                                              "Annualized standard deviation", 
-                                              "Annualized sharpe ratio",
-                                              "Monthly sknewness",
-                                              "Monthly excess kurtosis",
-                                              "Value at risk",
-                                              "Expected shortfall",
-                                              "Max drawdown"))
-
-port_xts %>% table.Distributions()
-port_xts %>% table.DownsideRiskRatio()
-port_xts %>% table.DrawdownsRatio()
-
-library(quantmod)
-getSymbols("^GSPC", from = '2011-12-01', to = "2018-06-30")
-sp500 <- GSPC$GSPC.Adjusted[endpoints(GSPC, "months")] %>% Return.calculate()
-
-benchmark <- as.xts(bind_cols(sp500[-1], select_port$date)[1], order.by = select_port$date)
-names(benchmark) <- "sp500"
-
-port_xts_2 <- merge(port_xts, benchmark)
-
-port_xts %>% table.InformationRatio(Rb = benchmark)
-port_xts %>% InformationRatio(Rb = benchmark)

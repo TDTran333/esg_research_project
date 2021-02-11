@@ -157,9 +157,91 @@ env_ratios_stats%>%
 
 
 
+# -------------------------------------------------------------------------
 
+ghg_port <- map2_df(map(ghg_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
+  pivot_wider(., names_from = port, values_from = ret)
 
+sp500_tr <- getSymbols("^SP500TR", warnings = FALSE, auto.assign = getOption('getSymbols.auto.assign',FALSE))
+sp1500_tr <- read_xls(here("data", "raw_data", "sp1500_total_ret.xls"), 
+                   skip = 7, 
+                   col_names = c("date", "sp1500"), 
+                   col_types = c("date", "numeric")) %>% 
+  suppressWarnings() %>%
+  filter(!is.na(sp1500))
 
+sp1500_xts <- xts(sp1500_tr$sp1500, order.by = sp1500_tr$date)
 
+if (params$datafreq == "monthly") {
+  sp500_ret <- sp500_tr$SP500TR.Adjusted[endpoints(sp500_tr, "months")] %>% Return.calculate()
+  sp1500_ret <- sp1500_xts[endpoints(sp1500_xts, "months")] %>% Return.calculate()
+} else {
+  sp500_ret <- sp500_tr$GSPC.Adjusted %>% Return.calculate()
+  sp1500_ret <- sp1500_xts %>% Return.calculate()
+}
 
+bm_ret <- merge(sp500_ret, sp1500_ret)
+bm_ret_cleaned <- bm_ret %>% fortify.zoo() %>% as_tibble() %>%  
+  `colnames<-`(c("date", "sp500", "sp1500")) %>% 
+  mutate(date = ifelse(params$datafreq == "monthly", as.Date.yearmon(as.yearmon(date)), date))
 
+ghg_port_bm <- ghg_port %>% 
+  inner_join(bm_ret_cleaned, by = "date")
+
+select_port <- ghg_port_bm %>% filter(model_name == "Green Bw") %>% 
+  mutate(top_minus_bottom = top_10 - bottom_10, 
+         top_minus_bottom_pct = top_10_pct - bottom_10_pct,
+         top_minus_bottom_alpha = top_10_alpha - bottom_10_alpha,
+         top_minus_bottom_alpha_pct = top_10_alpha_pct - bottom_10_alpha_pct)
+
+port_xts <- xts(select_port[, -(1:3)], order.by = select_port$date)
+port_xts %>% table.Arbitrary(metrics = c("Return.cumulative", 
+                                         "Return.annualized", 
+                                         "StdDev.annualized",
+                                         "SharpeRatio.annualized",
+                                         "skewness",
+                                         "kurtosis",
+                                         "VaR",
+                                         "ETL",
+                                         "maxDrawdown"), 
+                             metricsNames = c("Cumulative return", 
+                                              "Annualized return",
+                                              "Annualized standard deviation", 
+                                              "Annualized sharpe ratio",
+                                              "Monthly sknewness",
+                                              "Monthly excess kurtosis",
+                                              "Value at risk",
+                                              "Expected shortfall",
+                                              "Max drawdown"))
+
+env_port <- map2_df(map(env_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
+  pivot_wider(., names_from = port, values_from = ret)
+
+env_port_bm <- env_port %>% 
+  inner_join(bm_ret_cleaned, by = "date")
+
+select_port <- env_port_bm %>% filter(model_name == "Neutral Bw") %>% 
+  mutate(top_minus_bottom = top_10 - bottom_10, 
+         top_minus_bottom_pct = top_10_pct - bottom_10_pct,
+         top_minus_bottom_alpha = top_10_alpha - bottom_10_alpha,
+         top_minus_bottom_alpha_pct = top_10_alpha_pct - bottom_10_alpha_pct)
+
+port_xts <- xts(select_port[, -(1:3)], order.by = select_port$date)
+port_xts %>% table.Arbitrary(metrics = c("Return.cumulative", 
+                                         "Return.annualized", 
+                                         "StdDev.annualized",
+                                         "SharpeRatio.annualized",
+                                         "skewness",
+                                         "kurtosis",
+                                         "VaR",
+                                         "ETL",
+                                         "maxDrawdown"), 
+                             metricsNames = c("Cumulative return", 
+                                              "Annualized return",
+                                              "Annualized standard deviation", 
+                                              "Annualized sharpe ratio",
+                                              "Monthly sknewness",
+                                              "Monthly excess kurtosis",
+                                              "Value at risk",
+                                              "Expected shortfall",
+                                              "Max drawdown"))

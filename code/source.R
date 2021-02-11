@@ -2,6 +2,7 @@
 shhh <- suppressPackageStartupMessages # It's a library, so shhh!
 
 shhh(require(here))                 # Relative paths
+shhh(require(readxl))               # Read excel file
 shhh(require(tidyverse))            # Data manipulation
 shhh(require(lubridate))            # Date management
 shhh(require(purrr))                # Functional programming
@@ -14,7 +15,8 @@ shhh(require(zoo))                  # For rolling window
 shhh(require(stringr))              # String manipulation
 shhh(require(widyr))                # Pairwise correlation
 shhh(require(knitr))                # Generate tables
-shhh(library(PerformanceAnalytics)) # Portfolio Performance
+shhh(require(PerformanceAnalytics)) # Portfolio Performance
+shhh(require(quantmod))             # Stock returns
 
 options(dplyr.summarise.inform = FALSE)
 
