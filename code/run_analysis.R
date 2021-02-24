@@ -155,9 +155,6 @@ env_results[paste0(esg_group, "_fw")] <- map(esg_group, ~f_run_model(.id = env_i
 glimpse(ghg_results)
 glimpse(env_results)
 
-# saveRDS(ghg_results, here("output", "results", "monthly_ghg_3f_results2.Rds"))
-# saveRDS(env_results, here("output", "results", "monthly_env_3f_results2.Rds"))
-
 # -------------------------------------------------------------------------
 
 # Note: Splitted out the correlation function because of file size.
@@ -234,6 +231,3 @@ env_results_cor[paste0(esg_group, "_fw")] <- map(esg_group, ~run_cor(.id = env_i
 
 glimpse(ghg_results_cor)
 glimpse(env_results_cor)
-
-# saveRDS(ghg_results_cor, here("output", "results", "monthly_ghg_3f_cor.Rds"))
-# saveRDS(env_results_cor, here("output", "results", "monthly_env_3f_cor.Rds"))

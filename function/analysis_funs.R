@@ -11,7 +11,8 @@ shhh(require(lubridate))               # Date management
 # 6. f_create_dates:        create dates for loop
 # 7. f_ret_mat:             Generate ret_mat from data_df
 # 8. f_factor_mat:          Generate factor_mat from factor_df
-# 9. alpha screen:          Alpha screening function
+# 9. alpha_screen:          Alpha screening function from PeerPerformance
+# 10. f_alpha_cor:          Alpha correlations
 # 11. f_tbl_screening:      Summary table of probability ratios
 # 12. f_screenplot:         Create screenplot
 # 13. f_avg_ratios:         Calc average screening ratios
@@ -90,7 +91,7 @@ f_create_esg_type <- compiler::cmpfun(.f_create_esg_type)
          subtitle = "Brown, Green, Neutral and Undisclosed.")
   
   firms_name <- paste(deparse(substitute(.df)), "avg_number_of_firms.png", sep = "_")
-  ggsave(here("Output", "figures", "firms", firms_name), width = 6, height = 6, dpi = 150)
+  ggsave(here("Output", "figures", "firms", firms_name), width = 8, height = 6, dpi = 150)
   
   return(p)
 }
@@ -354,7 +355,9 @@ f_tidy_n_obs <- compiler::cmpfun(.f_tidy_n_obs)
     ggplot(aes(average)) +
     geom_histogram(bins = 10) +
     facet_wrap(~ model_name, scale = "free", ncol = 3, dir = "v") +
-    labs(title = paste0("Percentage of concordant observations for ", deparse(substitute(.obs_df)), ".")) + 
+    labs(title = paste0("Percentage of concordant observations for ", deparse(substitute(.obs_df)), "."),
+         x = "Proportion",
+         y = "Count") + 
     scale_x_continuous(labels = percent)
   
   obs_name <- paste(deparse(substitute(.obs_df)), params$window, "m", 
@@ -392,7 +395,9 @@ f_missing_obs <- compiler::cmpfun(.f_missing_obs)
     geom_vline(xintercept = -0.3, lty = "dashed") +
     geom_vline(xintercept = 0.3, lty = "dashed") + 
     labs(title = paste0("Correlations of alphas for ", .model_name, " from ", .esg_name, "."),
-         subtitle = "Dashed lines correspond to -0.3 and +0.3")
+         subtitle = "Dashed lines correspond to -0.3 and +0.3",
+         x = "Correlation",
+         y = "Count")
   
   alpha_cor_name <- paste(.esg_name, .model_name, params$window, "m", params$datafreq, "data", 
                           params$factor, "factor_model_alpha_cor.png", sep = "_")
@@ -533,7 +538,7 @@ f_port_ret <- compiler::cmpfun(.f_port_ret)
   
   wider_port <- .port %>% 
     filter(model_name == .model_name) %>% 
-    pivot_wider(names_from = model_name, values_from = top_10:benchmark_minus_20_pct) %>% select(-period) %>% clean_names()
+    pivot_wider(names_from = model_name) %>% select(-period) %>% clean_names()
   
   longer_port <- sapply(wider_port[,-1] + 1, cumprod) %>% 
     as_tibble() %>% 
@@ -550,7 +555,11 @@ f_port_growth <- compiler::cmpfun(.f_port_growth)
   title <- paste0("Portfolio growth with ", params$datafreq, " data using ", 
                   .esg_name, " firms universe based on ", .esg_var, " ESG variable.")
   
-  p <- .port %>% 
+  p <- .port %>%
+    mutate(name = factor(name, levels = c("top_10_ratio", "top_10_ratio_pct", "top_10_alpha", "top_10_alpha_pct",
+                                          "bot_10_ratio", "bot_10_ratio_pct", "bot_10_alpha", "bot_10_alpha_pct",
+                                          "long_short_ratio", "long_short_ratio_pct", "long_short_alpha", "long_short_alpha_pct",
+                                          "bm_ex_ratio", "bm_ex_ratio_pct", "sp500", "sp1500"))) %>%
     ggplot(aes(date, value, color = name)) +
     geom_line() +
     facet_wrap(~name, scale = "free_y") +
@@ -564,7 +573,26 @@ f_port_growth <- compiler::cmpfun(.f_port_growth)
                              params$factor, "factor_model_port_growth_chart.png", sep = "_")
   ggsave(p, filename = here("Output", "figures", "portfolio", port_growth_chart), width = 10, height = 8, dpi = 150)
   
-  return(p)
+  p2 <- .port %>%
+    mutate(name = factor(name, levels = c("top_10_ratio", "top_10_ratio_pct", "top_10_alpha", "top_10_alpha_pct",
+                                          "bot_10_ratio", "bot_10_ratio_pct", "bot_10_alpha", "bot_10_alpha_pct",
+                                          "long_short_ratio", "long_short_ratio_pct", "long_short_alpha", "long_short_alpha_pct",
+                                          "bm_ex_ratio", "bm_ex_ratio_pct", "sp500", "sp1500"))) %>%
+    filter(name %in% c("top_10_ratio_pct", "top_10_alpha_pct", "bot_10_ratio_pct", "bot_10_alpha_pct", "sp500")) %>% 
+    ggplot(aes(date, value, color = name)) +
+    geom_line(size = 1.5) +
+    scale_y_continuous(labels = percent) +
+    labs(title = title,
+         x = "Date",
+         y = "Percent",
+         color = "Portfolio id") +
+    theme(legend.position = "bottom")
+  
+  port_growth_chart2 <- paste(deparse(substitute(.port)), params$window, "m", params$datafreq, "data",
+                             params$factor, "factor_model_port_growth_chart2.png", sep = "_")
+  ggsave(p2, filename = here("Output", "figures", "portfolio", port_growth_chart2), width = 10, height = 6, dpi = 150)
+  
+  return(list(p, p2))
 }
 
 f_port_growth_chart <- compiler::cmpfun(.f_port_growth_chart)
@@ -578,20 +606,30 @@ f_port_growth_chart <- compiler::cmpfun(.f_port_growth_chart)
   
   port_xts <- xts(select_port[, -(1:3)], order.by = select_port$date)
   
-  filename <- paste(params$datafreq, params$factor, deparse(substitute(.port)), .model_name, sep = "_")
+  stats <- port_xts %>% table.Arbitrary(metrics = c("Return.cumulative", 
+                                           "Return.annualized", 
+                                           "StdDev.annualized",
+                                           "SharpeRatio.annualized",
+                                           "skewness",
+                                           "kurtosis",
+                                           "VaR",
+                                           "ETL",
+                                           "maxDrawdown"), 
+                               metricsNames = c("Cumulative return", 
+                                                "Annualized return",
+                                                "Annualized standard deviation", 
+                                                "Annualized sharpe ratio",
+                                                "Monthly skewness",
+                                                "Monthly excess kurtosis",
+                                                "Value at risk",
+                                                "Expected shortfall",
+                                                "Max drawdown")) %>%
+    bind_rows(InformationRatio(port_xts, Rb = port_xts$sp500) %>% as.data.frame()) %>% t()
   
-  stats <- port_xts %>% table.Stats() 
+  filename <- paste(params$datafreq, params$factor, deparse(substitute(.port)), .model_name, sep = "_")
   stats %>% write.csv(file = here("output", "portfolio", paste0(filename, "_stats.csv")))
   
-  sharpe <- port_xts %>% SharpeRatio() 
-  sharpe %>% write.csv(file = here("output", "portfolio", paste0(filename, "_sharpe.csv")))
-  
-  downside_risk <- port_xts %>% table.DownsideRisk() 
-  downside_risk %>% write.csv(file = here("output", "portfolio", paste0(filename, "_downside_risk.csv")))
-  
-  out <- list(stats, sharpe, downside_risk) %>% `names<-`(c("stats", "sharpe", "downside_risk"))
-  
-  return(out)
+  return(stats)
 }
 f_port_stats <- compiler::cmpfun(.f_port_stats)
 

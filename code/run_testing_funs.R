@@ -33,6 +33,34 @@ factor_df_daily <- readRDS(here("data", params$subDir, "daily_factor.rds"))
 ghg_df_monthly <- sp_df_monthly %>% f_create_esg_type(.esg_var = "ghg", "monthly", params$window)
 env_df_monthly <- sp_df_monthly %>% f_create_esg_type(.esg_var = "envscore", "monthly", params$window)
 
+plot_ghg <- ghg_df_monthly %>%
+  group_by(date) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = q_50), color = "blue", lty = 2, size = 1.2) +
+  geom_ribbon(aes(ymin = q_25, ymax = q_75), color = "black", size = 1.2, alpha = 0.25) +
+  scale_x_yearqtr(format = "%Y-Q%q") +
+  labs(x = "Date",
+       y = "GHG emissions intensity",
+       title = "Greenhouse gas emissions intensity over time.",
+       subtitle = paste("Ribbon: 25th-75th percentile."))
+
+plot_ghg %>% 
+  ggsave(filename = here("Output", "figures", "firms", "ghg_over_time.png"), width = 8, height = 6, dpi = 150)
+
+plot_env <- env_df_monthly %>%
+  group_by(date) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = q_50), color = "blue", lty = 2, size = 1.2) +
+  geom_ribbon(aes(ymin = q_25, ymax = q_75), color = "black", size = 1.2, alpha = 0.25) +
+  scale_x_yearqtr(format = "%Y-Q%q") +
+  labs(x = "Date",
+       y = "Environment Score",
+       title = "Environment score over time.",
+       subtitle = paste("Ribbon: 25th-75th percentile."))
+
+plot_env %>% 
+  ggsave(filename = here("Output", "figures", "firms", "env_over_time.png"), width = 8, height = 6, dpi = 150)
+
 # ghg_df_monthly %>% descr() %>% write.csv(file = here("output", "firms", "ghg_monthly_stats.csv"))
 # env_df_monthly %>% descr() %>% write.csv(file = here("output", "firms", "env_monthly_stats.csv"))
 

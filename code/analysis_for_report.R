@@ -175,18 +175,18 @@ sp1500_xts <- xts(sp1500_tr$sp1500, order.by = sp1500_tr$date)
 if (params$datafreq == "monthly") {
   sp500_ret <- sp500_tr$SP500TR.Adjusted[endpoints(sp500_tr, "months")] %>% Return.calculate()
   sp1500_ret <- sp1500_xts[endpoints(sp1500_xts, "months")] %>% Return.calculate()
+  bm_ret <- merge(sp500_ret, sp1500_ret) %>% fortify.zoo() %>% as_tibble() %>%  
+    `colnames<-`(c("date", "sp500", "sp1500")) %>% 
+    mutate(date = as.yearmon(date) %>% as.Date.yearmon())
 } else {
-  sp500_ret <- sp500_tr$GSPC.Adjusted %>% Return.calculate()
+  sp500_ret <- sp500_tr$SP500TR.Adjusted %>% Return.calculate()
   sp1500_ret <- sp1500_xts %>% Return.calculate()
+  bm_ret <- merge(sp500_ret, sp1500_ret) %>% fortify.zoo() %>% as_tibble() %>%  
+    `colnames<-`(c("date", "sp500", "sp1500"))
 }
 
-bm_ret <- merge(sp500_ret, sp1500_ret)
-bm_ret_cleaned <- bm_ret %>% fortify.zoo() %>% as_tibble() %>%  
-  `colnames<-`(c("date", "sp500", "sp1500")) %>% 
-  mutate(date = ifelse(params$datafreq == "monthly", as.Date.yearmon(as.yearmon(date)), date))
-
 ghg_port_bm <- ghg_port %>% 
-  inner_join(bm_ret_cleaned, by = "date")
+  inner_join(bm_ret, by = "date")
 
 select_port <- ghg_port_bm %>% filter(model_name == "Green Bw") %>% 
   mutate(top_minus_bottom = top_10 - bottom_10, 
@@ -195,7 +195,7 @@ select_port <- ghg_port_bm %>% filter(model_name == "Green Bw") %>%
          top_minus_bottom_alpha_pct = top_10_alpha_pct - bottom_10_alpha_pct)
 
 port_xts <- xts(select_port[, -(1:3)], order.by = select_port$date)
-port_xts %>% table.Arbitrary(metrics = c("Return.cumulative", 
+test <- port_xts %>% table.Arbitrary(metrics = c("Return.cumulative", 
                                          "Return.annualized", 
                                          "StdDev.annualized",
                                          "SharpeRatio.annualized",
@@ -208,11 +208,14 @@ port_xts %>% table.Arbitrary(metrics = c("Return.cumulative",
                                               "Annualized return",
                                               "Annualized standard deviation", 
                                               "Annualized sharpe ratio",
-                                              "Monthly sknewness",
+                                              "Monthly skewness",
                                               "Monthly excess kurtosis",
                                               "Value at risk",
                                               "Expected shortfall",
-                                              "Max drawdown"))
+                                              "Max drawdown")) %>% 
+  bind_rows(InformationRatio(port_xts, Rb = port_xts$sp500) %>% as.data.frame())
+
+table.InformationRatio(port_xts, Rb = port_xts$sp500)
 
 env_port <- map2_df(map(env_results[1:3], "port_ret"), model_names[1:3], ~mutate(.x, model_name = .y)) %>% 
   pivot_wider(., names_from = port, values_from = ret)
