@@ -562,7 +562,7 @@ f_port_growth <- compiler::cmpfun(.f_port_growth)
                                           "bm_ex_ratio", "bm_ex_ratio_pct", "sp500", "sp1500"))) %>%
     ggplot(aes(date, value, color = name)) +
     geom_line() +
-    facet_wrap(~name, scale = "free_y") +
+    facet_wrap(~name) +
     scale_y_continuous(labels = percent) +
     labs(title = title,
          x = "Date",

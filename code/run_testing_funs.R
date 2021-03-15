@@ -19,7 +19,6 @@ st_options(round.digits = 2, style = "rmarkdown", plain.ascii = FALSE)
 kable <- function(data, digits = 4) {knitr::kable(data, booktabs = TRUE, digits = digits)}
 
 # Load Data ---------------------------------------------------------------
-
 sp_df_monthly <- readRDS(here("data", params$subDir, "monthly_data_sp.rds"))
 factor_df_monthly <- readRDS(here("data", params$subDir, "monthly_factor.rds"))
 
